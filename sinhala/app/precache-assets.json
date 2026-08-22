@@ -1,0 +1,21 @@
+[
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./app.js",
+  "./sw.js",
+  "./manifest.webmanifest",
+  "./precache-assets.json",
+  "./icon.svg",
+  "./icon-192.png",
+  "./icon-512.png",
+  "./apple-touch-icon.png",
+  "./data/lessons.json",
+  "./data/ai-translations.json",
+  "./data/translation-backlog.json",
+  "./docs/lesson-plans.md",
+  "./docs/course-library.md",
+  "./docs/grammar-and-conversations.md",
+  "./docs/language-sources.md",
+  "./docs/architecture.md"
+]

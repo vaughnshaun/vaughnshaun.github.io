@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#0f766e">
+    <title>Sinhala Course</title>
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Sinhala Immersion</p>
+          <h1>Today</h1>
+        </div>
+        <div class="streak" aria-label="Current streak">
+          <span id="streakDays">0</span>
+          <small>day streak</small>
+        </div>
+      </header>
+      <p id="offlineStatus" class="offline-status is-pending" role="status" aria-live="polite">Preparing offline access…</p>
+
+      <main>
+        <section class="hero-panel">
+          <div>
+            <p id="coursePrinciple">Structured drills prepare the brain; unstructured video makes the language feel alive.</p>
+            <div class="progress-track" aria-label="Course progress">
+              <span id="courseProgress"></span>
+            </div>
+          </div>
+          <button class="primary-action" id="continueButton" type="button">Continue</button>
+        </section>
+
+        <section class="tabs" aria-label="Study sections">
+          <button class="tab active" data-view="path" type="button">Course</button>
+          <button class="tab" data-view="practice" type="button">Practice</button>
+          <button class="tab" data-view="words" type="button">Words</button>
+          <button class="tab" data-view="scripts" type="button">Stories</button>
+          <button class="tab" data-view="grammar" type="button">Library</button>
+          <button class="tab" data-view="translations" type="button">Translations</button>
+          <button class="tab" data-view="progress" type="button">Progress</button>
+        </section>
+
+        <section id="pathView" class="view active" aria-live="polite">
+          <div id="lessonPath" class="lesson-path"></div>
+        </section>
+
+        <section id="practiceView" class="view" aria-live="polite">
+          <div class="practice-header">
+            <div>
+              <p class="eyebrow">Practice</p>
+              <h2 id="practiceTitle">Lesson</h2>
+              <p id="practiceMeta" class="practice-meta"></p>
+            </div>
+            <select id="lessonSelect" aria-label="Choose lesson"></select>
+          </div>
+          <div class="practice-progress" aria-label="Current lesson progress">
+            <span id="practiceProgress"></span>
+          </div>
+          <div id="completionNotice" class="completion-notice" hidden></div>
+          <div id="practiceCard" class="practice-card"></div>
+        </section>
+
+        <section id="wordsView" class="view" aria-live="polite">
+          <div class="practice-header">
+            <div>
+              <p class="eyebrow">Dedicated vocab drills</p>
+              <h2>Word Practice</h2>
+            </div>
+          </div>
+          <div class="library-controls">
+            <select id="wordPracticeFilter" aria-label="Choose word practice level">
+              <option value="all">All word sets</option>
+            </select>
+            <select id="transliterationRate" aria-label="Choose lesson transliteration rate">
+              <option value="0">No transliteration</option>
+              <option value="0.1">10% transliteration</option>
+              <option value="0.2" selected>20% transliteration</option>
+              <option value="0.35">35% transliteration</option>
+              <option value="0.5">50% transliteration</option>
+            </select>
+          </div>
+          <div id="wordPracticeSummary" class="library-summary"></div>
+          <div id="wordPracticeList" class="grammar-panel"></div>
+        </section>
+
+        <section id="scriptsView" class="view" aria-live="polite">
+          <div class="practice-header">
+            <div>
+              <p class="eyebrow">Full translated reader</p>
+              <h2>Stories and Scripts</h2>
+            </div>
+            <div class="script-controls">
+              <input id="scriptSearch" type="search" placeholder="Search title or word" aria-label="Search scripts">
+              <button id="storyGrammarOrderToggle" class="small-action" type="button" aria-pressed="false">Group by grammar</button>
+            </div>
+          </div>
+          <div id="scriptList" class="script-list"></div>
+        </section>
+
+        <section id="grammarView" class="view" aria-live="polite">
+          <div class="practice-header">
+            <div>
+              <p class="eyebrow">Study by topic or structure</p>
+              <h2>Course Library</h2>
+            </div>
+          </div>
+          <div class="library-controls">
+            <input id="librarySearch" type="search" placeholder="Search topics, words, or grammar" aria-label="Search the course library">
+            <select id="grammarLessonSelect" aria-label="Choose library level"></select>
+            <select id="libraryContentFilter" aria-label="Choose library content">
+              <option value="all">All content</option>
+              <option value="topics">Topic lessons</option>
+              <option value="grammar">Grammar only</option>
+              <option value="conversations">Conversations only</option>
+            </select>
+          </div>
+          <div id="librarySummary" class="library-summary"></div>
+          <div id="grammarPanel" class="grammar-panel"></div>
+        </section>
+
+        <section id="translationsView" class="view" aria-live="polite">
+          <div class="practice-header translation-heading">
+            <div>
+              <p class="eyebrow">Translation review</p>
+              <h2>Edit and Approve</h2>
+            </div>
+            <div class="translation-file-actions">
+              <button class="small-action" id="exportTranslations" type="button">Export edits</button>
+              <label class="small-action file-action" for="importTranslations">Import edits</label>
+              <input id="importTranslations" class="visually-hidden" type="file" accept="application/json">
+            </div>
+          </div>
+          <div class="translation-controls">
+            <input id="translationSearch" type="search" placeholder="Search Sinhala or English" aria-label="Search translations">
+            <select id="translationLessonFilter" aria-label="Filter translations by lesson"></select>
+            <select id="translationKindFilter" aria-label="Filter translations by type">
+              <option value="word">Words</option>
+              <option value="phrase">Phrases</option>
+              <option value="all">Words and phrases</option>
+            </select>
+            <select id="translationStatusFilter" aria-label="Filter translations by review status">
+              <option value="ai">AI* needs review</option>
+              <option value="pending">Pending</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="source">From scripts</option>
+              <option value="all">All translations</option>
+            </select>
+          </div>
+          <div id="translationSummary" class="translation-summary"></div>
+          <div id="translationList" class="translation-list"></div>
+          <div id="translationPager" class="translation-pager"></div>
+        </section>
+
+        <section id="progressView" class="view" aria-live="polite">
+          <div class="note-band">
+            <h2>Study Plan and Architecture</h2>
+            <p>Move through numbered lessons for structured practice, then use any Stories script for free immersion and shadowing.</p>
+            <a href="./docs/lesson-plans.md">Open lesson plan docs</a>
+            <a href="./docs/course-library.md">Open the full course library</a>
+            <a href="./docs/grammar-and-conversations.md">Open grammar and conversation reference</a>
+            <a href="./docs/language-sources.md">Open language sources and research notes</a>
+            <a href="./docs/architecture.md">Open architecture docs</a>
+          </div>
+          <div id="statsGrid" class="stats-grid"></div>
+          <div id="progressPanel" class="progress-panel"></div>
+        </section>
+      </main>
+      <div id="lookupPopover" class="lookup-popover" hidden></div>
+    </div>
+
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
