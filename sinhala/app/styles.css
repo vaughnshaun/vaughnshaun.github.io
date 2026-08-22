@@ -536,6 +536,8 @@ h3 {
 
 .choice.selected {
   border-color: var(--blue);
+  outline: 3px solid rgba(37, 99, 235, 0.24);
+  outline-offset: 2px;
   background: #eff5ff;
 }
 
@@ -544,9 +546,17 @@ h3 {
   background: #e8f3f1;
 }
 
+.choice.selected.correct {
+  outline-color: rgba(15, 118, 110, 0.24);
+}
+
 .choice.wrong {
   border-color: var(--coral);
   background: #fff0ec;
+}
+
+.choice.selected.wrong {
+  outline-color: rgba(239, 115, 93, 0.28);
 }
 
 .sentence-builder {

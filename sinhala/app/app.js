@@ -578,7 +578,7 @@ function renderGrammarChoiceCard(lesson, exercise, total) {
       ? state.answer
       : { selected: "", revealed: [], checked: false };
   const checked = Boolean(answerState.checked);
-  const correct = answerState.selected === exercise.answer;
+  const correct = checked && answerState.selected === exercise.answer;
   const choices = exercise.sessionChoices ?? exercise.choices;
   els.practiceCard.innerHTML = `
     <div class="card-stage">
@@ -591,10 +591,10 @@ function renderGrammarChoiceCard(lesson, exercise, total) {
       <div>
         <p class="feedback">Tap a phrase to reveal its translation, then choose the example that best matches this structure.</p>
         <div class="choice-grid bilingual-grid">${choices
-          .map((choice) => bilingualChoiceButton(choice, checked, exercise.answer, answerState.revealed, exercise))
+          .map((choice) => bilingualChoiceButton(choice, checked, exercise.answer, answerState.revealed, exercise, { disabled: correct }))
           .join("")}</div>
         <p class="feedback">${checked ? (correct ? "That is the pattern." : `Answer: ${escapeHtml(exercise.exampleSi)} = ${escapeHtml(exercise.exampleEn)} ${translationBadge({ aiMarked: exercise.exampleAiMarked })}`) : ""}</p>
-        <button class="secondary-action" type="button" id="checkGrammarChoice" ${answerState.selected ? "" : "disabled"}>${checked ? "Checked" : "Check answer"}</button>
+        ${checked ? "" : `<button class="secondary-action" type="button" id="checkGrammarChoice" ${answerState.selected ? "" : "disabled"}>Submit</button>`}
         ${checked ? `<button class="secondary-action" type="button" id="nextExercise">${nextLabel(lesson, total)}</button>` : ""}
       </div>
     </div>`;
@@ -723,13 +723,15 @@ function choiceButton(choice, checked, answer, options = {}) {
   return `<button class="${classes.join(" ")}" type="button" data-choice="${escapeHtml(choice)}"><span class="${labelClass}">${escapeHtml(label)}</span></button>`;
 }
 
-function bilingualChoiceButton(choice, checked, answer, revealedChoices = [], exercise = null) {
+function bilingualChoiceButton(choice, checked, answer, revealedChoices = [], exercise = null, options = {}) {
   const classes = ["choice", "bilingual-choice"];
   const selectedAnswer = state.answer && typeof state.answer === "object" ? state.answer.selected : state.answer;
+  const selected = choice.si === selectedAnswer;
+  if (selected) classes.push("selected");
   if (checked && choice.si === selectedAnswer) classes.push(choice.si === answer ? "correct" : "wrong");
-  if (checked && choice.si === answer) classes.push("correct");
+  else if (checked && choice.si === answer) classes.push("correct");
   const revealed = revealedChoices.includes(choice.si);
-  return `<button class="${classes.join(" ")}" type="button" data-bilingual-choice="${escapeHtml(choice.si)}"><strong class="${hasSinhalaText(choice.si) ? "sinhala-choice" : ""}">${escapeHtml(visibleSinhalaText(choice.si, exercise ?? choice, choice.transliteration))}</strong><small class="${revealed || checked ? "" : "translation-hidden"}">${revealed || checked ? `${escapeHtml(choice.en)} ${translationBadge(choice)}` : "Tap to reveal translation"}</small></button>`;
+  return `<button class="${classes.join(" ")}" type="button" data-bilingual-choice="${escapeHtml(choice.si)}" aria-pressed="${selected}" ${options.disabled ? "disabled" : ""}><strong class="${hasSinhalaText(choice.si) ? "sinhala-choice" : ""}">${escapeHtml(visibleSinhalaText(choice.si, exercise ?? choice, choice.transliteration))}</strong><small class="${revealed || checked ? "" : "translation-hidden"}">${revealed || checked ? `${escapeHtml(choice.en)} ${translationBadge(choice)}` : "Tap to reveal translation"}</small></button>`;
 }
 
 function nextButton(handler) {
