@@ -215,7 +215,7 @@ Each passage records translation provenance:
 
 Generated exercise types:
 
-- `choice`: multiple-choice vocabulary recognition.
+- `choice`: multiple-choice vocabulary recognition. The first selection is scored immediately and locks every word choice, leaving **Next** as the only forward action.
 - `word_choice`: dedicated word-drill translation in either direction.
 - `matching`: match Sinhala vocabulary to English.
 - `fill_blank`: complete a real script line.

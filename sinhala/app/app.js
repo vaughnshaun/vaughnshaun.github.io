@@ -327,18 +327,20 @@ function renderChoiceCard(lesson, exercise, total) {
         <div class="sinhala-text">${practiceSinhalaHtml(exercise.prompt, "", exercise, { tokens: false })}</div>
       </div>
       <div>
-        <div class="choice-grid">${(exercise.sessionChoices ?? exercise.choices).map((choice) => choiceButton(choice, checked, exercise.answer)).join("")}</div>
+        <div class="choice-grid">${(exercise.sessionChoices ?? exercise.choices).map((choice) => choiceButton(choice, checked, exercise.answer, { disabled: checked })).join("")}</div>
         <p class="feedback">${checked ? (correct ? "Correct." : `Answer: ${escapeHtml(exercise.answer)}`) : ""}</p>
         <button class="secondary-action" type="button" id="nextExercise" ${checked ? "" : "disabled"}>${checked ? nextLabel(lesson, total) : "Choose an answer"}</button>
       </div>
     </div>`;
-  els.practiceCard.querySelectorAll("[data-choice]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.answer = button.dataset.choice;
-      recordAttempt(exercise, button.dataset.choice === exercise.answer);
-      renderPractice();
+  if (!checked) {
+    els.practiceCard.querySelectorAll("[data-choice]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.answer = button.dataset.choice;
+        recordAttempt(exercise, button.dataset.choice === exercise.answer);
+        renderPractice();
+      });
     });
-  });
+  }
   nextButton(() => advanceExercise(lesson, total));
 }
 
@@ -720,7 +722,7 @@ function choiceButton(choice, checked, answer, options = {}) {
       ? visibleSinhalaText(choice, options.exercise, options.transliteration)
       : String(choice);
   const labelClass = options.choiceLanguage === "si" && hasSinhalaText(choice) ? "choice-label sinhala-choice" : "choice-label";
-  return `<button class="${classes.join(" ")}" type="button" data-choice="${escapeHtml(choice)}"><span class="${labelClass}">${escapeHtml(label)}</span></button>`;
+  return `<button class="${classes.join(" ")}" type="button" data-choice="${escapeHtml(choice)}" ${options.disabled ? "disabled" : ""}><span class="${labelClass}">${escapeHtml(label)}</span></button>`;
 }
 
 function bilingualChoiceButton(choice, checked, answer, revealedChoices = [], exercise = null, options = {}) {
