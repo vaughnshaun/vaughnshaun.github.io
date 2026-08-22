@@ -223,7 +223,7 @@ Generated exercise types:
 - `structure`: identify sentence parts and final verbs.
 - `response`: produce a short Sinhala response.
 - `speaking`: say a real script line aloud and review structure.
-- `grammar_choice`: recognize a target grammar pattern in bilingual examples. Tapping an option reveals its translation and gives the selected card a visible outline; **Submit** checks it, an incorrect result remains reselectable, and a checked result exposes the separate **Next** action.
+- `grammar_choice`: recognize a target grammar pattern in bilingual examples. Tapping an option reveals its translation and gives the selected card a visible outline; **Submit** checks it, locks every option regardless of the result, and exposes the separate **Next** action.
 - `conversation_choice`: choose a natural bilingual reply to a dialogue turn.
 - `conversation_response`: produce a reply, then compare it with a model answer.
 

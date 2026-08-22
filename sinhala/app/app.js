@@ -591,7 +591,7 @@ function renderGrammarChoiceCard(lesson, exercise, total) {
       <div>
         <p class="feedback">Tap a phrase to reveal its translation, then choose the example that best matches this structure.</p>
         <div class="choice-grid bilingual-grid">${choices
-          .map((choice) => bilingualChoiceButton(choice, checked, exercise.answer, answerState.revealed, exercise, { disabled: correct }))
+          .map((choice) => bilingualChoiceButton(choice, checked, exercise.answer, answerState.revealed, exercise, { disabled: checked }))
           .join("")}</div>
         <p class="feedback">${checked ? (correct ? "That is the pattern." : `Answer: ${escapeHtml(exercise.exampleSi)} = ${escapeHtml(exercise.exampleEn)} ${translationBadge({ aiMarked: exercise.exampleAiMarked })}`) : ""}</p>
         ${checked ? "" : `<button class="secondary-action" type="button" id="checkGrammarChoice" ${answerState.selected ? "" : "disabled"}>Submit</button>`}
