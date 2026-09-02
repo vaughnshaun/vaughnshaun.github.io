@@ -1,6 +1,6 @@
 # Sinhala Lesson Plans From Immersion Scripts
 
-The `Immersion/` folder currently contains 94 Markdown files. The lesson generator found 68 usable source lessons, 1,904 vocabulary items, and 1,203 immersion passages. It also imports 28 lesson-note files, two verb JSON files, plus phrase and word lists from `my-basic-lessons/` and `my-translations/`. Together they feed 106 numbered lessons, 43 topic lessons in Library, 2,840 numbered-lesson variation cards, 6,864 story-practice cards, and six dedicated word-drill sets with 5,938 drill items.
+The `Immersion/` folder currently contains 96 Markdown files, including archival inputs excluded from learner data. The lesson generator found 69 usable source lessons, 2,547 vocabulary items, and 1,360 immersion passages. It also imports 28 lesson-note files, two verb JSON files, plus phrase and word lists from `my-basic-lessons/` and `my-translations/`. Together they feed 108 numbered lessons, 43 topic lessons in Library, 2,896 numbered-lesson variation cards, 8,739 story-practice cards, and six dedicated word-drill sets with 7,103 drill items.
 
 Yes: mixing structured lessons with unstructured videos is ideal. Structured practice gives you handles for grammar and vocabulary. Video immersion gives you rhythm, accent, emotion, and messy real context. The trick is not to split them into separate worlds.
 
@@ -253,6 +253,14 @@ When importing new scripts, run `npm run build:data`, `npm run translate:data`, 
    ```
 
 5. Run `npm run build:data`, `npm run translate:data`, and `npm run build:data` to refresh the app and translate new passages.
+
+For a completed story note in which a timestamp heading contains bold speaker sections and each Sinhala line owns nested word definitions plus a final full translation, normalize it first:
+
+```sh
+npm run import:story -- "Immersion/My Story Completed.md" --output "Immersion/My Story Completed Output.md" --title "My Story" --difficulty upper --level story --topics "family | conflict" --tags "story | dialogue | needs-native-review"
+```
+
+The output is directly reusable by Stories, story practice, numbered-course immersion cards, sentence building, lookup, and word drills. Its frontmatter records lesson difficulty/topics, each passage has searchable grammar tags, and its consolidated glossary merges every distinct `|` meaning for duplicate Sinhala entries. Every glossary word or phrase has separate difficulty, topic, grammar, and target-lesson tags, so it can enter the matching level drill and topic-aligned numbered lesson. Preserve the original note as an archive with `<!-- app-import: ignore -->` so it is not imported twice.
 
 ## What To Avoid
 

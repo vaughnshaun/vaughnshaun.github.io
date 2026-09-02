@@ -887,7 +887,7 @@ function advanceExercise(lesson, total) {
 function renderScripts() {
   const term = els.scriptSearch.value.trim().toLowerCase();
   const lessons = state.data.lessons.filter((lesson) => {
-    const haystack = `${lesson.title} ${lesson.focus} ${lesson.vocabulary.map((item) => `${item.si} ${item.en}`).join(" ")}`.toLowerCase();
+    const haystack = `${lesson.title} ${lesson.focus} ${(lesson.topics ?? []).join(" ")} ${(lesson.tags ?? []).join(" ")} ${(lesson.grammarTags ?? []).join(" ")} ${lesson.passages.map((passage) => `${passage.speaker} ${(passage.tags ?? []).join(" ")}`).join(" ")} ${lesson.vocabulary.map((item) => `${item.si} ${item.en} ${(item.tags ?? []).join(" ")}`).join(" ")}`.toLowerCase();
     return !term || haystack.includes(term);
   });
   els.storyGrammarOrderToggle.textContent = state.storiesGroupedByGrammar ? "Show normal order" : "Group by grammar";
@@ -910,6 +910,7 @@ function renderScripts() {
           <div>
             <h3>${escapeHtml(lesson.title)}</h3>
             <p>${escapeHtml(lesson.source)} · ${lesson.passages.length} lines · ${translated} translations${aiMarked ? ` · ${aiMarked} AI*` : ""}${practiced}</p>
+            ${grammarTagsHtml([lesson.level, lesson.difficulty, ...(lesson.topics ?? []), ...(lesson.tags ?? [])])}
           </div>
           <button class="small-action" type="button" data-open="${lesson.id}" data-open-label="${openLabel}">${isOpen ? "Close" : openLabel}</button>
         </div>
@@ -1113,6 +1114,7 @@ function readerLine(line) {
       <button class="copy-button" type="button" data-copy-line="${escapeHtml(`${line.si}\n${line.en}`)}">Copy</button>
     </div>
     <p class="reader-si">${renderTokens(line.si, line.en)}</p>
+    ${grammarTagsHtml(line.tags)}
     <div class="reader-tools">
       <button class="small-action" type="button" data-story-toggle="translation" data-reader-key="${escapeHtml(readerKey)}">${translationVisible ? "Hide translation" : "Reveal translation"}</button>
       <button class="small-action" type="button" data-story-toggle="grammar" data-reader-key="${escapeHtml(readerKey)}">${grammarVisible ? "Hide grammar" : "Reveal grammar"}</button>
@@ -1128,7 +1130,10 @@ function readerLine(line) {
 
 function vocabRow(item) {
   const alternatives = item.alternatives?.length ? ` · ${escapeHtml(item.alternatives.join(", "))}` : "";
-  return `<div class="vocab-row"><strong>${escapeHtml(item.si)}</strong><span>${escapeHtml(item.en)}${alternatives}</span></div>`;
+  const displayTags = (item.tags ?? [])
+    .filter((tag) => !tag.startsWith("lesson:"))
+    .map((tag) => tag.replace(/^(kind|difficulty|topic|grammar|part-of-speech):/, ""));
+  return `<div class="vocab-row"><strong>${escapeHtml(item.si)}</strong><span>${escapeHtml(item.en)}${alternatives}${grammarTagsHtml(displayTags)}</span></div>`;
 }
 
 function grammarTagsHtml(tags) {
@@ -2100,6 +2105,7 @@ function renderStats() {
     <div class="stat"><strong>${stats.wordPracticeSets ?? 0}</strong><span>Word drill sets</span></div>
     <div class="stat"><strong>${stats.wordPracticeItems ?? 0}</strong><span>Word drill items</span></div>
     <div class="stat"><strong>${stats.vocabularyItems}</strong><span>Vocabulary cards found</span></div>
+    <div class="stat"><strong>${stats.taggedSourceVocabularyItems ?? 0}</strong><span>Tagged story words and phrases</span></div>
     <div class="stat"><strong>${stats.passages}</strong><span>Immersion lines available</span></div>
     <div class="stat"><strong>${stats.sourceTranslatedPassages ?? stats.translatedPassages}</strong><span>Translations from script notes</span></div>
     <div class="stat"><strong>${translationItems().filter(({ line }) => line.aiMarked).length}</strong><span>AI* translations to review</span></div>

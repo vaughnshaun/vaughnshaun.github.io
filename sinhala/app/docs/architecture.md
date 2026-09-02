@@ -25,6 +25,7 @@ For implementation-oriented navigation, use [Codebase Map](codebase-map.md). For
 | `scripts/pattern-families.mjs` | Larger authored pattern-family corpora for rotating the same concept through different lexical choices |
 | `scripts/course-library.mjs` | Researched grammar additions, staged topic lessons, and source catalog |
 | `scripts/imported-content.mjs` | Parses imported lesson notes, verb JSON, and translation files into extra lesson and vocabulary sources |
+| `scripts/import-story.mjs` | Normalizes nested timestamp/speaker story notes into tagged and deduplicated immersion Markdown |
 | `scripts/build-lessons.mjs` | Scans Markdown and generates lesson data |
 | `scripts/translate-missing.mjs` | Translates pending passages with Google Translate and resume support |
 | `data/lessons.json` | Generated course data consumed by the app |
@@ -71,10 +72,14 @@ flowchart LR
 
 The generator looks for:
 
+- Tagged story frontmatter for an explicit title, difficulty, course level, topics, lesson tags, and grammar tags.
 - Sinhala text using the Unicode Sinhala block.
-- Vocabulary bullets in the form `- word = meaning`.
+- Vocabulary bullets in the form `- word = meaning`; repeated entries merge all distinct pipe-separated meanings.
 - Speaker labels like `- Mother`.
-- Timestamps like `1:45` or `0:00 - 2:02`.
+- Bold speaker labels like `**Mother**`.
+- Timestamps like `1:45` or `## 0:00 - 2:02`.
+- Passage children such as `@tags = past-events | genitive`, followed by the full English translation as the final indented bullet.
+- Consolidated glossary children such as `@tags = kind:phrase | difficulty:story | topic:reasons-and-conditions | grammar:conditional-nam | lesson:reference-reasons-plans`.
 - Recurring grammar signals such as negation, past tense, needs/wants, connectors, and verb chains.
 - Full English line translations already written under Sinhala lines.
 - Stable translation keys based on the source file and exact Sinhala text.
@@ -133,6 +138,9 @@ A source lesson represents one immersion script:
   "source": "Immersion/Red Shoes Script.md",
   "difficulty": "intermediate",
   "focus": "past events through story scenes",
+  "topics": ["betrayal", "forgiveness"],
+  "tags": ["story", "dialogue"],
+  "grammarTags": ["past-events", "reported-content"],
   "vocabulary": [],
   "passages": [],
   "grammar": [],
@@ -211,6 +219,10 @@ Each passage records translation provenance:
 }
 ```
 
+A passage from a structured story import can also carry descriptive `tags`. The Stories search and reader expose those tags, and passage-derived practice cards retain them. Tags never participate in stable identity.
+
+A structured source vocabulary item can additionally carry `kind`, `level`, `topics`, `grammarTags`, `referenceLessonIds`, and its complete `tags` list. The story importer classifies words and multiword phrases separately, assigns their own difficulty rather than inheriting the whole story's level, and maps semantic or grammatical signals to existing Library lesson IDs. Course warm-up selection treats a matching tagged source item as topic-aligned; Words places it in the corresponding level drill. These routing tags remain descriptive metadata and do not alter translation or SRS identities.
+
 `translationStatus` is `translated` for script notes, `ai-translated`, `reviewed` for a local user override, or `draft-gloss` for a newly imported line still awaiting translation.
 
 Generated exercise types:
@@ -252,7 +264,7 @@ The builder interleaves exercise pools from all source scripts and emits numbere
 
 Course rounds are sampled at runtime from each lesson's `variationPool`: Basic and Foundation target 10 questions, Story and Conversation target 11, and Advanced targets 12. Generated pools contain 20, 24, 28, 30, or 32 cards respectively. The sampler first places a real-script card in Immersion, then prefers topic-aligned cards in every part before drawing the small grammar, conversation, or due-review extensions. Each of the three required passes rebuilds the session from that pool, so the lesson is longer overall without forcing one static 30-card sitting.
 
-The 106-lesson sequence is ordered Basic -> Foundation -> Story -> Conversation -> Advanced and divided into visual units of 10 lessons. The first unfinished numbered lesson is recommended. A numbered lesson is completed only after three full runtime passes, and each new pass rebuilds the session so the learner sees fresh permutations before the app advances. The sequence may grow when imported lesson-note or verb-guide topics raise the minimum lesson count needed to surface available reference material.
+The 108-lesson sequence is ordered Basic -> Foundation -> Story -> Conversation -> Advanced and divided into visual units of 10 lessons. The first unfinished numbered lesson is recommended. A numbered lesson is completed only after three full runtime passes, and each new pass rebuilds the session so the learner sees fresh permutations before the app advances. The sequence may grow when imported lesson-note, verb-guide, or structured story material raises the minimum lesson count needed to surface available content.
 
 The sequence is open rather than locked. The Course path and Practice picker allow skipping ahead, going back, and reviewing completed lessons. Progression is recommended rather than enforced: the first unfinished lesson is the next step, but the learner can always choose another level or revisit completed material.
 
