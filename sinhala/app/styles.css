@@ -666,32 +666,36 @@ h3 {
 }
 
 .reader-lookup-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
   gap: 10px;
   font-family: "Noto Sans Sinhala", "Iskoola Pota", "Malithi Web", system-ui, sans-serif;
   font-size: 1.05rem;
 }
 
+.reader-lookup-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .reader-lookup-pager {
   display: flex;
   align-items: center;
-  min-width: 0;
   gap: 6px;
 }
 
-.reader-lookup-pager > div {
+.reader-lookup-term {
   display: grid;
   min-width: 0;
   gap: 1px;
 }
 
-.reader-lookup-pager strong {
+.reader-lookup-term strong {
   overflow-wrap: anywhere;
 }
 
-.reader-lookup-pager span {
+.reader-lookup-term span {
   color: var(--muted);
   font-family: system-ui, sans-serif;
   font-size: 0.7rem;
