@@ -76,9 +76,8 @@ const els = {
   readerImportFile: document.querySelector("#readerImportFile"),
   readerImportName: document.querySelector("#readerImportName"),
   readerImportButton: document.querySelector("#readerImportButton"),
-  readerDocumentSelect: document.querySelector("#readerDocumentSelect"),
-  readerRemoveButton: document.querySelector("#readerRemoveButton"),
   readerImportMessage: document.querySelector("#readerImportMessage"),
+  readerLibrary: document.querySelector("#readerLibrary"),
   readerContent: document.querySelector("#readerContent"),
   grammarPanel: document.querySelector("#grammarPanel"),
   translationSearch: document.querySelector("#translationSearch"),
@@ -104,7 +103,6 @@ async function init() {
     state.data = await response.json();
     restoreImportedStories();
     state.readerDocuments = await loadReaderDocuments();
-    state.currentReaderDocumentId = state.readerDocuments[0]?.id ?? null;
     initializeTranslations();
     state.currentLessonId = nextRecommendedLesson()?.id ?? state.data.courseLessons[0]?.id;
     restoreCourseCheckpoint(state.currentLessonId);
@@ -156,12 +154,6 @@ function bindEvents() {
   els.importStoryFile.addEventListener("change", importStoryFromFile);
   els.readerImportFile.addEventListener("change", selectReaderFile);
   els.readerImportButton.addEventListener("click", importReaderFile);
-  els.readerDocumentSelect.addEventListener("change", () => {
-    state.currentReaderDocumentId = els.readerDocumentSelect.value || null;
-    state.readerLookup = null;
-    renderReader();
-  });
-  els.readerRemoveButton.addEventListener("click", removeCurrentReaderDocument);
   els.translationSearch.addEventListener("input", () => {
     state.translationPage = 0;
     renderTranslationEditor();
@@ -1331,7 +1323,7 @@ async function loadReaderDocuments() {
 }
 
 function selectedReaderDocument() {
-  return state.readerDocuments.find((document) => document.id === state.currentReaderDocumentId) ?? state.readerDocuments[0] ?? null;
+  return state.readerDocuments.find((document) => document.id === state.currentReaderDocumentId) ?? null;
 }
 
 function readerNameFromFileName(fileName) {
@@ -1346,16 +1338,30 @@ function renderReaderImportMessage() {
 
 function renderReader() {
   const document = selectedReaderDocument();
-  els.readerDocumentSelect.innerHTML = state.readerDocuments.length
-    ? state.readerDocuments.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)} · ${item.passages.length} lines</option>`).join("")
-    : `<option value="">No imported transcript</option>`;
-  els.readerDocumentSelect.value = document?.id ?? "";
-  els.readerDocumentSelect.disabled = !document;
-  els.readerRemoveButton.disabled = !document;
   renderReaderImportMessage();
+  els.readerLibrary.innerHTML = state.readerDocuments.length
+    ? state.readerDocuments
+        .map(
+          (item) => `<article class="reader-library-item ${item.id === document?.id ? "open" : ""}">
+            <div><strong>${escapeHtml(item.title)}</strong><span>${item.passages.length} lines · ${item.vocabulary.length} glossary entries</span></div>
+            <div class="reader-library-actions"><button class="small-action" type="button" data-open-reader="${escapeHtml(item.id)}">${item.id === document?.id ? "Close" : "Open"}</button><button class="small-action danger-action" type="button" data-remove-reader="${escapeHtml(item.id)}">Remove</button></div>
+          </article>`
+        )
+        .join("")
+    : `<div class="note-band"><p>No personal transcripts imported yet.</p></div>`;
   els.readerContent.innerHTML = document
     ? readerDocumentHtml(document)
-    : `<div class="note-band"><h3>Import a translated transcript to begin</h3><p>Choose a transcript.json or translated Markdown file. The original stays untouched; this device keeps a private reader copy.</p></div>`;
+    : `<div class="note-band"><h3>Choose a transcript to read</h3><p>Import a translated transcript above, then press Open. The original file stays untouched; this device keeps a private reader copy.</p></div>`;
+  els.readerLibrary.querySelectorAll("[data-open-reader]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.currentReaderDocumentId = state.currentReaderDocumentId === button.dataset.openReader ? null : button.dataset.openReader;
+      state.readerLookup = null;
+      renderReader();
+    });
+  });
+  els.readerLibrary.querySelectorAll("[data-remove-reader]").forEach((button) => {
+    button.addEventListener("click", () => removeReaderDocument(button.dataset.removeReader));
+  });
   bindReaderEvents(document);
 }
 
@@ -1391,11 +1397,7 @@ function readerMatchesForWord(document, word) {
   const normalized = readerTokens(word)[0] ?? "";
   const entries = document.vocabulary ?? [];
   const exact = entries.filter((item) => readerTokens(item.si).join(" ") === normalized);
-  const phrases = entries.filter((item) => {
-    const tokens = readerTokens(item.si);
-    return tokens.length > 1 && tokens.includes(normalized);
-  });
-  return { exact: dedupeReaderVocabulary(exact), phrases: dedupeReaderVocabulary(phrases) };
+  return dedupeReaderVocabulary(exact);
 }
 
 function dedupeReaderVocabulary(items) {
@@ -1415,12 +1417,12 @@ function readerMeaningHtml(meanings) {
 function readerLookupHtml(line, document) {
   const lookup = state.readerLookup;
   if (!lookup || lookup.documentId !== document.id || lookup.lineId !== line.id) return "";
-  const { exact, phrases } = readerMatchesForWord(document, lookup.word);
+  const exact = readerMatchesForWord(document, lookup.word);
   const fullTranslationVisible = Boolean(lookup.fullTranslationVisible);
   return `<section class="reader-lookup-card" aria-live="polite">
     <div class="reader-lookup-heading"><strong>${escapeHtml(lookup.word)}</strong><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
     ${exact.length ? `<div><p class="reader-lookup-label">Meanings</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this word.</p>`}
-    ${phrases.length ? `<div class="reader-related-phrases"><p class="reader-lookup-label">Related phrases in this transcript</p>${phrases.map((item) => `<div><b>${escapeHtml(item.si)}</b>${readerMeaningHtml(item.meanings)}</div>`).join("")}</div>` : ""}
+    ${exact.length ? (lookup.editing ? `<label class="reader-meaning-editor">Edit meanings <small>Separate alternatives with |</small><input id="readerMeaningInput" value="${escapeHtml(exact[0].meanings.join(" | "))}"></label><div class="reader-edit-actions"><button class="small-action" type="button" data-save-reader-meaning>Save meaning</button><button class="small-action" type="button" data-cancel-reader-meaning>Cancel</button></div>` : `<button class="reader-line-translation-toggle" type="button" data-edit-reader-meaning>Edit word meaning</button>`) : ""}
     <button class="reader-line-translation-toggle" type="button" data-toggle-reader-line-translation>${fullTranslationVisible ? "Hide full line translation" : "Show full line translation"}</button>
     ${fullTranslationVisible ? `<p class="reader-line-translation">${escapeHtml(line.en)}</p>` : ""}
   </section>`;
@@ -1448,6 +1450,49 @@ function bindReaderEvents(document) {
     if (state.readerLookup) state.readerLookup.fullTranslationVisible = !state.readerLookup.fullTranslationVisible;
     renderReader();
   });
+  els.readerContent.querySelector("[data-edit-reader-meaning]")?.addEventListener("click", () => {
+    if (state.readerLookup) state.readerLookup.editing = true;
+    renderReader();
+  });
+  els.readerContent.querySelector("[data-cancel-reader-meaning]")?.addEventListener("click", () => {
+    if (state.readerLookup) state.readerLookup.editing = false;
+    renderReader();
+  });
+  els.readerContent.querySelector("[data-save-reader-meaning]")?.addEventListener("click", async () => {
+    const input = els.readerContent.querySelector("#readerMeaningInput");
+    await saveReaderWordMeaning(document, state.readerLookup?.word, input?.value ?? "");
+  });
+}
+
+async function saveReaderWordMeaning(document, word, value) {
+  const meanings = value
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!meanings.length) {
+    state.readerImportMessage = "Add at least one English meaning before saving.";
+    state.readerImportError = true;
+    renderReaderImportMessage();
+    return;
+  }
+  const normalized = readerTokens(word)[0] ?? "";
+  const update = (item) => {
+    if (readerTokens(item.si).join(" ") === normalized) item.meanings = [...new Set(meanings)];
+  };
+  document.vocabulary.forEach(update);
+  document.passages.forEach((line) => line.vocabulary.forEach(update));
+  try {
+    await readerStoreRequest("readwrite", (store) => store.put({ id: document.id, importedAt: new Date().toISOString(), document }));
+    state.readerDocuments = state.readerDocuments.map((item) => (item.id === document.id ? document : item));
+    state.readerLookup = { ...state.readerLookup, editing: false };
+    state.readerImportMessage = `Saved the meaning for ${word} in ${document.title}.`;
+    state.readerImportError = false;
+    renderReader();
+  } catch (error) {
+    state.readerImportMessage = error.message || "That word meaning could not be saved.";
+    state.readerImportError = true;
+    renderReaderImportMessage();
+  }
 }
 
 function selectReaderFile(event) {
@@ -1475,7 +1520,7 @@ async function importReaderFile() {
     if (!("indexedDB" in window)) throw new Error("This browser does not support device-local Reader storage.");
     await readerStoreRequest("readwrite", (store) => store.put(record));
     state.readerDocuments = [document, ...state.readerDocuments.filter((item) => item.id !== document.id)];
-    state.currentReaderDocumentId = document.id;
+    state.currentReaderDocumentId = null;
     state.pendingReaderFile = null;
     els.readerImportFile.value = "";
     state.readerImportMessage = `Imported ${document.title}: ${document.passages.length} lines and ${document.vocabulary.length} glossary entries.${state.readerDocuments.some((item) => item.id === document.id) ? " Re-import this name any time to replace it." : ""}`;
@@ -1489,14 +1534,14 @@ async function importReaderFile() {
   }
 }
 
-async function removeCurrentReaderDocument() {
-  const document = selectedReaderDocument();
+async function removeReaderDocument(documentId) {
+  const document = state.readerDocuments.find((item) => item.id === documentId);
   if (!document) return;
   if (!window.confirm(`Remove “${document.title}” from this device? The original file will not be deleted.`)) return;
   try {
     await readerStoreRequest("readwrite", (store) => store.delete(document.id));
     state.readerDocuments = state.readerDocuments.filter((item) => item.id !== document.id);
-    state.currentReaderDocumentId = state.readerDocuments[0]?.id ?? null;
+    if (state.currentReaderDocumentId === document.id) state.currentReaderDocumentId = null;
     state.readerLookup = null;
     state.readerImportMessage = `Removed ${document.title} from this device.`;
     state.readerImportError = false;

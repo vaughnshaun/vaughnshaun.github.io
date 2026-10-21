@@ -498,7 +498,7 @@ h3 {
 }
 
 .reader-import-name,
-.reader-document-controls label {
+.reader-meaning-editor {
   display: grid;
   gap: 5px;
   color: var(--muted);
@@ -507,7 +507,7 @@ h3 {
 }
 
 .reader-import-name input,
-.reader-document-controls select {
+.reader-meaning-editor input {
   width: 100%;
   min-height: 44px;
   border: 1px solid var(--line);
@@ -518,16 +518,52 @@ h3 {
   font: inherit;
 }
 
-.reader-document-controls {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 14px;
+.reader-library {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
 }
 
-.reader-document-controls label {
-  width: min(100%, 420px);
+.reader-library-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.reader-library-item.open {
+  border-color: rgba(15, 118, 110, 0.48);
+  background: #f8fcfb;
+}
+
+.reader-library-item > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.reader-library-item span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.reader-library-actions,
+.reader-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reader-meaning-editor {
+  width: min(100%, 520px);
+}
+
+.reader-meaning-editor small {
+  color: var(--muted);
+  font-weight: 600;
 }
 
 .reader-content {
@@ -661,21 +697,6 @@ h3 {
   color: var(--teal-dark);
   font-size: 0.84rem;
   font-weight: 700;
-}
-
-.reader-related-phrases {
-  display: grid;
-  gap: 8px;
-  max-height: 210px;
-  overflow: auto;
-  padding-right: 4px;
-}
-
-.reader-related-phrases > div {
-  display: grid;
-  gap: 5px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(24, 33, 31, 0.08);
 }
 
 .reader-line-translation-toggle {
@@ -1969,6 +1990,11 @@ h3 {
   .reader-import-panel .small-action,
   .story-file-input {
     width: 100%;
+  }
+
+  .reader-library-item {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .lesson-node {
