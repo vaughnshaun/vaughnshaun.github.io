@@ -1410,20 +1410,46 @@ function readerDocumentHtml(document) {
 }
 
 function renderReaderTokens(line, document) {
+  const phraseMatches = readerPhraseMatchesForLine(document, line.si);
+  let wordIndex = 0;
   return line.si
     .split(/(\s+|[.,!?;:()[\]'"“”‘’…]+)/)
     .filter(Boolean)
     .map((token) => {
       if (!/[\u0D80-\u0DFF]/.test(token)) return escapeHtml(token);
       const word = readerTokens(token)[0] ?? "";
-      const selected = state.readerLookup?.documentId === document.id && state.readerLookup?.lineId === line.id && state.readerLookup?.word === word;
-      return `<button class="reader-word-token ${selected ? "selected" : ""}" type="button" data-reader-word="${escapeHtml(word)}" data-reader-line-id="${escapeHtml(line.id)}">${escapeHtml(token)}</button>`;
+      const selected = state.readerLookup?.documentId === document.id && state.readerLookup?.lineId === line.id && state.readerLookup?.term === word;
+      const phrases = phraseMatches.get(wordIndex) ?? [];
+      wordIndex += 1;
+      return `<button class="reader-word-token ${selected ? "selected" : ""}" type="button" data-reader-word="${escapeHtml(word)}" data-reader-line-id="${escapeHtml(line.id)}">${escapeHtml(token)}</button>${phrases
+        .map(
+          (phrase) =>
+            `<button class="reader-phrase-marker" type="button" data-reader-phrase="${escapeHtml(phrase.si)}" data-reader-line-id="${escapeHtml(line.id)}" aria-label="Show phrase meaning for ${escapeHtml(phrase.si)}" title="Show phrase meaning: ${escapeHtml(phrase.si)}">phrase</button>`
+        )
+        .join("")}`;
     })
     .join("");
 }
 
-function readerMatchesForWord(document, word) {
-  const normalized = readerTokens(word)[0] ?? "";
+function readerPhraseMatchesForLine(document, value) {
+  const words = readerTokens(value);
+  const matches = new Map();
+  (document.vocabulary ?? []).forEach((item) => {
+    const phraseWords = readerTokens(item.si);
+    if (phraseWords.length < 2 || phraseWords.length > words.length) return;
+    for (let start = 0; start <= words.length - phraseWords.length; start += 1) {
+      if (!phraseWords.every((word, index) => word === words[start + index])) continue;
+      const end = start + phraseWords.length - 1;
+      const existing = matches.get(end) ?? [];
+      if (!existing.some((entry) => entry.si === item.si)) existing.push(item);
+      matches.set(end, existing);
+    }
+  });
+  return matches;
+}
+
+function readerMatchesForTerm(document, term) {
+  const normalized = readerTokens(term).join(" ");
   const entries = document.vocabulary ?? [];
   const exact = entries.filter((item) => readerTokens(item.si).join(" ") === normalized);
   return dedupeReaderVocabulary(exact);
@@ -1446,12 +1472,13 @@ function readerMeaningHtml(meanings) {
 function readerLookupHtml(line, document) {
   const lookup = state.readerLookup;
   if (!lookup || lookup.documentId !== document.id || lookup.lineId !== line.id) return "";
-  const exact = readerMatchesForWord(document, lookup.word);
+  const exact = readerMatchesForTerm(document, lookup.term);
   const fullTranslationVisible = Boolean(lookup.fullTranslationVisible);
+  const isPhrase = readerTokens(lookup.term).length > 1;
   return `<section class="reader-lookup-card" aria-live="polite">
-    <div class="reader-lookup-heading"><strong>${escapeHtml(lookup.word)}</strong><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
-    ${exact.length ? `<div><p class="reader-lookup-label">Meanings</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this word yet.</p>`}
-    ${lookup.editing ? `<label class="reader-meaning-editor">${exact.length ? "Edit meanings" : "Add meanings"} <small>Separate alternatives with |</small><input id="readerMeaningInput" value="${escapeHtml(exact[0]?.meanings.join(" | ") ?? "")}" placeholder="English meaning"></label><div class="reader-edit-actions"><button class="small-action" type="button" data-save-reader-meaning>${exact.length ? "Save meaning" : "Add meaning"}</button><button class="small-action" type="button" data-cancel-reader-meaning>Cancel</button></div>` : `<button class="reader-line-translation-toggle" type="button" data-edit-reader-meaning>${exact.length ? "Edit word meaning" : "Add word meaning"}</button>`}
+    <div class="reader-lookup-heading"><strong>${escapeHtml(lookup.term)}</strong><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
+    ${exact.length ? `<div><p class="reader-lookup-label">${isPhrase ? "Phrase meanings" : "Meanings"}</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this ${isPhrase ? "phrase" : "word"} yet.</p>`}
+    ${lookup.editing ? `<label class="reader-meaning-editor">${exact.length ? "Edit meanings" : "Add meanings"} <small>Separate alternatives with |</small><input id="readerMeaningInput" value="${escapeHtml(exact[0]?.meanings.join(" | ") ?? "")}" placeholder="English meaning"></label><div class="reader-edit-actions"><button class="small-action" type="button" data-save-reader-meaning>${exact.length ? "Save meaning" : "Add meaning"}</button><button class="small-action" type="button" data-cancel-reader-meaning>Cancel</button></div>` : `<button class="reader-line-translation-toggle" type="button" data-edit-reader-meaning>${exact.length ? `Edit ${isPhrase ? "phrase" : "word"} meaning` : `Add ${isPhrase ? "phrase" : "word"} meaning`}</button>`}
     <button class="reader-line-translation-toggle" type="button" data-toggle-reader-line-translation>${fullTranslationVisible ? "Hide full line translation" : "Show full line translation"}</button>
     ${fullTranslationVisible ? `<p class="reader-line-translation">${escapeHtml(line.en)}</p>` : ""}
   </section>`;
@@ -1464,10 +1491,22 @@ function bindReaderEvents(document) {
       const sameSelection =
         state.readerLookup?.documentId === document.id &&
         state.readerLookup?.lineId === button.dataset.readerLineId &&
-        state.readerLookup?.word === button.dataset.readerWord;
+        state.readerLookup?.term === button.dataset.readerWord;
       state.readerLookup = sameSelection
         ? null
-        : { documentId: document.id, lineId: button.dataset.readerLineId, word: button.dataset.readerWord, fullTranslationVisible: false };
+        : { documentId: document.id, lineId: button.dataset.readerLineId, term: button.dataset.readerWord, fullTranslationVisible: false };
+      renderReader();
+    });
+  });
+  els.readerContent.querySelectorAll("[data-reader-phrase]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const sameSelection =
+        state.readerLookup?.documentId === document.id &&
+        state.readerLookup?.lineId === button.dataset.readerLineId &&
+        state.readerLookup?.term === button.dataset.readerPhrase;
+      state.readerLookup = sameSelection
+        ? null
+        : { documentId: document.id, lineId: button.dataset.readerLineId, term: button.dataset.readerPhrase, fullTranslationVisible: false };
       renderReader();
     });
   });
@@ -1489,11 +1528,11 @@ function bindReaderEvents(document) {
   });
   els.readerContent.querySelector("[data-save-reader-meaning]")?.addEventListener("click", async () => {
     const input = els.readerContent.querySelector("#readerMeaningInput");
-    await saveReaderWordMeaning(document, state.readerLookup?.word, input?.value ?? "");
+    await saveReaderMeaning(document, state.readerLookup?.term, input?.value ?? "");
   });
 }
 
-async function saveReaderWordMeaning(document, word, value) {
+async function saveReaderMeaning(document, term, value) {
   const meanings = value
     .split("|")
     .map((item) => item.trim())
@@ -1504,7 +1543,7 @@ async function saveReaderWordMeaning(document, word, value) {
     renderReaderImportMessage();
     return;
   }
-  const normalized = readerTokens(word)[0] ?? "";
+  const normalized = readerTokens(term).join(" ");
   let found = false;
   const update = (item) => {
     if (readerTokens(item.si).join(" ") === normalized) {
@@ -1515,7 +1554,7 @@ async function saveReaderWordMeaning(document, word, value) {
   document.vocabulary.forEach(update);
   document.passages.forEach((line) => line.vocabulary.forEach(update));
   if (!found) {
-    const item = { si: word, meanings: [...new Set(meanings)] };
+    const item = { si: term, meanings: [...new Set(meanings)] };
     document.vocabulary.push(item);
     document.passages.find((line) => line.id === state.readerLookup?.lineId)?.vocabulary.push({ ...item });
   }
@@ -1523,7 +1562,7 @@ async function saveReaderWordMeaning(document, word, value) {
     await saveReaderRecord({ id: document.id, importedAt: new Date().toISOString(), document });
     state.readerDocuments = state.readerDocuments.map((item) => (item.id === document.id ? document : item));
     state.readerLookup = { ...state.readerLookup, editing: false };
-    state.readerImportMessage = `Saved the meaning for ${word} in ${document.title}.`;
+    state.readerImportMessage = `Saved the meaning for ${term} in ${document.title}.`;
     state.readerImportError = false;
     renderReader();
   } catch (error) {
