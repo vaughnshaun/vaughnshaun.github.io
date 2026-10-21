@@ -1410,8 +1410,6 @@ function readerDocumentHtml(document) {
 }
 
 function renderReaderTokens(line, document) {
-  const phraseMatches = readerPhraseMatchesForLine(document, line.si);
-  let wordIndex = 0;
   return line.si
     .split(/(\s+|[.,!?;:()[\]'"“”‘’…]+)/)
     .filter(Boolean)
@@ -1419,33 +1417,19 @@ function renderReaderTokens(line, document) {
       if (!/[\u0D80-\u0DFF]/.test(token)) return escapeHtml(token);
       const word = readerTokens(token)[0] ?? "";
       const selected = state.readerLookup?.documentId === document.id && state.readerLookup?.lineId === line.id && state.readerLookup?.term === word;
-      const phrases = phraseMatches.get(wordIndex) ?? [];
-      wordIndex += 1;
-      return `<button class="reader-word-token ${selected ? "selected" : ""}" type="button" data-reader-word="${escapeHtml(word)}" data-reader-line-id="${escapeHtml(line.id)}">${escapeHtml(token)}</button>${phrases
-        .map(
-          (phrase) =>
-            `<button class="reader-phrase-marker" type="button" data-reader-phrase="${escapeHtml(phrase.si)}" data-reader-line-id="${escapeHtml(line.id)}" aria-label="Show phrase meaning for ${escapeHtml(phrase.si)}" title="Show phrase meaning: ${escapeHtml(phrase.si)}">phrase</button>`
-        )
-        .join("")}`;
+      return `<button class="reader-word-token ${selected ? "selected" : ""}" type="button" data-reader-word="${escapeHtml(word)}" data-reader-line-id="${escapeHtml(line.id)}">${escapeHtml(token)}</button>`;
     })
     .join("");
 }
 
-function readerPhraseMatchesForLine(document, value) {
-  const words = readerTokens(value);
-  const matches = new Map();
-  (document.vocabulary ?? []).forEach((item) => {
-    const phraseWords = readerTokens(item.si);
-    if (phraseWords.length < 2 || phraseWords.length > words.length) return;
-    for (let start = 0; start <= words.length - phraseWords.length; start += 1) {
-      if (!phraseWords.every((word, index) => word === words[start + index])) continue;
-      const end = start + phraseWords.length - 1;
-      const existing = matches.get(end) ?? [];
-      if (!existing.some((entry) => entry.si === item.si)) existing.push(item);
-      matches.set(end, existing);
-    }
-  });
-  return matches;
+function readerPhrasesForWord(document, word) {
+  const normalized = readerTokens(word)[0] ?? "";
+  return dedupeReaderVocabulary(
+    (document.vocabulary ?? []).filter((item) => {
+      const tokens = readerTokens(item.si);
+      return tokens.length > 1 && tokens.includes(normalized);
+    })
+  );
 }
 
 function readerMatchesForTerm(document, term) {
@@ -1475,9 +1459,11 @@ function readerLookupHtml(line, document) {
   const exact = readerMatchesForTerm(document, lookup.term);
   const fullTranslationVisible = Boolean(lookup.fullTranslationVisible);
   const isPhrase = readerTokens(lookup.term).length > 1;
+  const phrases = isPhrase ? [] : readerPhrasesForWord(document, lookup.term);
   return `<section class="reader-lookup-card" aria-live="polite">
     <div class="reader-lookup-heading"><strong>${escapeHtml(lookup.term)}</strong><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
     ${exact.length ? `<div><p class="reader-lookup-label">${isPhrase ? "Phrase meanings" : "Meanings"}</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this ${isPhrase ? "phrase" : "word"} yet.</p>`}
+    ${phrases.length ? `<div class="reader-related-phrases"><p class="reader-lookup-label">Phrases containing ${escapeHtml(lookup.term)}</p>${phrases.map((item) => `<div class="reader-related-phrase"><strong>${escapeHtml(item.si)}</strong>${readerMeaningHtml(item.meanings)}</div>`).join("")}</div>` : ""}
     ${lookup.editing ? `<label class="reader-meaning-editor">${exact.length ? "Edit meanings" : "Add meanings"} <small>Separate alternatives with |</small><input id="readerMeaningInput" value="${escapeHtml(exact[0]?.meanings.join(" | ") ?? "")}" placeholder="English meaning"></label><div class="reader-edit-actions"><button class="small-action" type="button" data-save-reader-meaning>${exact.length ? "Save meaning" : "Add meaning"}</button><button class="small-action" type="button" data-cancel-reader-meaning>Cancel</button></div>` : `<button class="reader-line-translation-toggle" type="button" data-edit-reader-meaning>${exact.length ? `Edit ${isPhrase ? "phrase" : "word"} meaning` : `Add ${isPhrase ? "phrase" : "word"} meaning`}</button>`}
     <button class="reader-line-translation-toggle" type="button" data-toggle-reader-line-translation>${fullTranslationVisible ? "Hide full line translation" : "Show full line translation"}</button>
     ${fullTranslationVisible ? `<p class="reader-line-translation">${escapeHtml(line.en)}</p>` : ""}
@@ -1495,18 +1481,6 @@ function bindReaderEvents(document) {
       state.readerLookup = sameSelection
         ? null
         : { documentId: document.id, lineId: button.dataset.readerLineId, term: button.dataset.readerWord, fullTranslationVisible: false };
-      renderReader();
-    });
-  });
-  els.readerContent.querySelectorAll("[data-reader-phrase]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const sameSelection =
-        state.readerLookup?.documentId === document.id &&
-        state.readerLookup?.lineId === button.dataset.readerLineId &&
-        state.readerLookup?.term === button.dataset.readerPhrase;
-      state.readerLookup = sameSelection
-        ? null
-        : { documentId: document.id, lineId: button.dataset.readerLineId, term: button.dataset.readerPhrase, fullTranslationVisible: false };
       renderReader();
     });
   });
