@@ -1,3 +1,13 @@
+import { importHash, parseImportableStory } from "./story-import.js";
+import { parseReaderImport, readerTokens } from "./reader-import.js";
+
+const IMPORTED_STORIES_STORAGE_KEY = "sinhala-imported-stories";
+const IMPORTED_STORY_NOTICE_KEY = "sinhala-story-import-notice";
+const READER_DATABASE_NAME = "sinhala-reader-imports";
+const READER_DATABASE_VERSION = 1;
+const READER_STORE_NAME = "documents";
+const initialStoryImportNotice = loadStoryImportNotice();
+
 const state = {
   data: null,
   currentLessonId: null,
@@ -25,7 +35,16 @@ const state = {
   curriculumTranslationEntries: [],
   translationPage: 0,
   translationPageSize: 20,
-  translationMessage: ""
+  translationMessage: "",
+  importedStoryRecords: loadImportedStoryRecords(),
+  storyImportMessage: initialStoryImportNotice.message,
+  storyImportError: initialStoryImportNotice.isError,
+  readerDocuments: [],
+  currentReaderDocumentId: null,
+  pendingReaderFile: null,
+  readerImportMessage: "",
+  readerImportError: false,
+  readerLookup: null
 };
 
 const els = {
@@ -51,7 +70,16 @@ const els = {
   wordPracticeList: document.querySelector("#wordPracticeList"),
   scriptSearch: document.querySelector("#scriptSearch"),
   storyGrammarOrderToggle: document.querySelector("#storyGrammarOrderToggle"),
+  importStoryFile: document.querySelector("#importStoryFile"),
+  storyImportMessage: document.querySelector("#storyImportMessage"),
   scriptList: document.querySelector("#scriptList"),
+  readerImportFile: document.querySelector("#readerImportFile"),
+  readerImportName: document.querySelector("#readerImportName"),
+  readerImportButton: document.querySelector("#readerImportButton"),
+  readerDocumentSelect: document.querySelector("#readerDocumentSelect"),
+  readerRemoveButton: document.querySelector("#readerRemoveButton"),
+  readerImportMessage: document.querySelector("#readerImportMessage"),
+  readerContent: document.querySelector("#readerContent"),
   grammarPanel: document.querySelector("#grammarPanel"),
   translationSearch: document.querySelector("#translationSearch"),
   translationLessonFilter: document.querySelector("#translationLessonFilter"),
@@ -74,6 +102,9 @@ async function init() {
     const response = await fetch("./data/lessons.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`Lesson data request failed with ${response.status}`);
     state.data = await response.json();
+    restoreImportedStories();
+    state.readerDocuments = await loadReaderDocuments();
+    state.currentReaderDocumentId = state.readerDocuments[0]?.id ?? null;
     initializeTranslations();
     state.currentLessonId = nextRecommendedLesson()?.id ?? state.data.courseLessons[0]?.id;
     restoreCourseCheckpoint(state.currentLessonId);
@@ -82,6 +113,7 @@ async function init() {
     state.currentReferenceLessonId = state.data.course.referenceLessons?.[0]?.id;
     bindEvents();
     render();
+    if (state.storyImportMessage) setView("scripts");
     registerServiceWorker();
   } catch (error) {
     els.lessonPath.innerHTML = `<div class="note-band"><h2>Lesson data is missing</h2><p>Run npm run build:data, then refresh this page.</p></div>`;
@@ -121,6 +153,15 @@ function bindEvents() {
     state.storiesGroupedByGrammar = !state.storiesGroupedByGrammar;
     renderScripts();
   });
+  els.importStoryFile.addEventListener("change", importStoryFromFile);
+  els.readerImportFile.addEventListener("change", selectReaderFile);
+  els.readerImportButton.addEventListener("click", importReaderFile);
+  els.readerDocumentSelect.addEventListener("change", () => {
+    state.currentReaderDocumentId = els.readerDocumentSelect.value || null;
+    state.readerLookup = null;
+    renderReader();
+  });
+  els.readerRemoveButton.addEventListener("click", removeCurrentReaderDocument);
   els.translationSearch.addEventListener("input", () => {
     state.translationPage = 0;
     renderTranslationEditor();
@@ -151,6 +192,7 @@ function render() {
   renderPractice();
   renderWords();
   renderScripts();
+  renderReader();
   renderGrammar();
   renderTranslationEditor();
   renderStats();
@@ -884,7 +926,590 @@ function advanceExercise(lesson, total) {
   renderPractice();
 }
 
+function importedReferenceLessonIds() {
+  return (state.data?.course.referenceLessons ?? []).map((lesson) => lesson.id);
+}
+
+function loadImportedStoryRecords() {
+  try {
+    const records = JSON.parse(localStorage.getItem(IMPORTED_STORIES_STORAGE_KEY));
+    if (!Array.isArray(records)) return [];
+    return records
+      .filter((record) => record && typeof record.markdown === "string" && typeof record.fileName === "string")
+      .map((record) => ({
+        id: String(record.id ?? ""),
+        fileName: record.fileName,
+        markdown: record.markdown,
+        importedAt: record.importedAt ?? ""
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function loadStoryImportNotice() {
+  try {
+    const notice = JSON.parse(sessionStorage.getItem(IMPORTED_STORY_NOTICE_KEY));
+    sessionStorage.removeItem(IMPORTED_STORY_NOTICE_KEY);
+    return { message: String(notice?.message ?? ""), isError: Boolean(notice?.isError) };
+  } catch {
+    return { message: "", isError: false };
+  }
+}
+
+function saveStoryImportNotice(message, isError = false) {
+  sessionStorage.setItem(IMPORTED_STORY_NOTICE_KEY, JSON.stringify({ message, isError }));
+}
+
+function saveImportedStoryRecords(records) {
+  localStorage.setItem(IMPORTED_STORIES_STORAGE_KEY, JSON.stringify(records));
+}
+
+function restoreImportedStories() {
+  const restored = [];
+  const failed = [];
+  for (const record of state.importedStoryRecords) {
+    try {
+      const parsed = parseImportableStory(record.markdown, {
+        fileName: record.fileName,
+        referenceLessonIds: importedReferenceLessonIds()
+      });
+      const normalizedRecord = { ...record, id: parsed.id };
+      integrateImportedStory(parsed, normalizedRecord);
+      restored.push(normalizedRecord);
+    } catch (error) {
+      console.warn(`Could not restore imported story ${record.fileName}.`, error);
+      failed.push(record.fileName);
+    }
+  }
+  state.importedStoryRecords = [...restored, ...state.importedStoryRecords.filter((record) => failed.includes(record.fileName))];
+  if (failed.length) {
+    state.storyImportMessage = `${failed.length} saved story ${failed.length === 1 ? "file needs" : "files need"} to be imported again.`;
+    state.storyImportError = true;
+  }
+}
+
+async function importStoryFromFile(event) {
+  const [file] = event.target.files;
+  event.target.value = "";
+  if (!file) return;
+  try {
+    if (!/\.md$/i.test(file.name)) throw new Error("Choose an importable Markdown (.md) story file.");
+    if (file.size > 2_000_000) throw new Error("Story files must be 2 MB or smaller for device-local storage.");
+    const markdown = await file.text();
+    const parsed = parseImportableStory(markdown, {
+      fileName: file.name,
+      referenceLessonIds: importedReferenceLessonIds()
+    });
+    const record = {
+      id: parsed.id,
+      fileName: file.name,
+      markdown,
+      importedAt: new Date().toISOString()
+    };
+    const nextRecords = [...state.importedStoryRecords.filter((item) => item.id !== parsed.id), record];
+    saveImportedStoryRecords(nextRecords);
+    const routedCards = potentialImportedCourseCardCount(parsed);
+    saveStoryImportNotice(`Imported ${parsed.title}: ${parsed.passages.length} lines and ${parsed.vocabulary.length} tagged words or phrases. Added ${routedCards} topic-aligned Course variations.${parsed.duplicateGlossaryEntries ? ` Merged ${parsed.duplicateGlossaryEntries} duplicate glossary ${parsed.duplicateGlossaryEntries === 1 ? "entry" : "entries"}.` : ""}`);
+    window.location.reload();
+  } catch (error) {
+    state.storyImportMessage = error.message || "That story file could not be imported.";
+    state.storyImportError = true;
+    renderStoryImportMessage(true);
+  }
+}
+
+function renderStoryImportMessage(isError = state.storyImportError) {
+  els.storyImportMessage.textContent = state.storyImportMessage;
+  els.storyImportMessage.hidden = !state.storyImportMessage;
+  els.storyImportMessage.classList.toggle("is-error", Boolean(isError));
+}
+
+function forgetImportedStory(id) {
+  const lesson = sourceLessonById(id);
+  if (!lesson?.importedByUser) return;
+  if (!window.confirm(`Forget “${lesson.title}” on this device? The original Markdown file will not be deleted.`)) return;
+  const nextRecords = state.importedStoryRecords.filter((record) => record.id !== id);
+  try {
+    saveImportedStoryRecords(nextRecords);
+  } catch (error) {
+    state.storyImportMessage = "The imported story could not be removed from device storage.";
+    renderStoryImportMessage(true);
+    return;
+  }
+  saveStoryImportNotice(`Forgot ${lesson.title} on this device. Its original Markdown file was not changed.`);
+  window.location.reload();
+}
+
+function potentialImportedCourseCardCount(parsed) {
+  return parsed.vocabulary.reduce(
+    (total, item) => total + state.data.courseLessons.filter(
+      (lesson) => levelRank(item.level) <= levelRank(lesson.level) && item.referenceLessonIds.some((id) => lesson.referenceLessonIds?.includes(id))
+    ).length,
+    0
+  );
+}
+
+function importChoiceItems(item, vocabulary, count = 4) {
+  const choices = [item];
+  for (const candidate of vocabulary) {
+    if (candidate.translationKey === item.translationKey || choices.some((choice) => choice.en.toLocaleLowerCase() === candidate.en.toLocaleLowerCase())) continue;
+    choices.push(candidate);
+    if (choices.length >= count) break;
+  }
+  return choices;
+}
+
+function importedChoiceExercise(item, vocabulary, extra = {}) {
+  const choiceItems = importChoiceItems(item, vocabulary);
+  if (choiceItems.length < 2) return null;
+  return {
+    type: "choice",
+    prompt: item.si,
+    answer: item.en,
+    kind: item.kind,
+    tags: item.tags,
+    topics: item.topics,
+    grammarTags: item.grammarTags,
+    referenceLessonIds: item.referenceLessonIds,
+    sourceLevel: item.level,
+    answerTranslationKey: item.translationKey,
+    choiceTranslations: choiceItems.map((choice) => ({ en: choice.en, translationKey: choice.translationKey, aiMarked: choice.aiMarked })),
+    choices: choiceItems.map((choice) => choice.en),
+    aiMarked: item.aiMarked,
+    reviewKey: `vocab:${cleanToken(item.si)}`,
+    skillId: `vocab:${cleanToken(item.si)}`,
+    ...extra
+  };
+}
+
+function importedSentenceExercise(passage, direction, distractorTokens, sourceLevel) {
+  const answerTokens = sentenceTokensForBuild(direction === "en_to_si" ? passage.si : passage.en);
+  if (answerTokens.length < 2 || answerTokens.length > 16) return null;
+  const answerSet = new Set(answerTokens.map((token) => token.toLocaleLowerCase()));
+  const distractors = uniqueStrings(distractorTokens.filter((token) => !answerSet.has(token.toLocaleLowerCase()))).slice(0, 4);
+  return {
+    type: "sentence_build",
+    direction,
+    prompt: direction === "en_to_si" ? passage.en : passage.si,
+    si: passage.si,
+    en: passage.en,
+    answer: answerTokens.join(" "),
+    answerTokens,
+    distractorTokens: distractors,
+    wordBank: [...answerTokens, ...distractors],
+    translation: passage.en,
+    translationKey: passage.translationKey,
+    translationStatus: passage.translationStatus,
+    aiMarked: passage.aiMarked,
+    tags: passage.tags,
+    reviewKey: `sentence:${passage.translationKey}:${direction}`,
+    skillId: `sentence:${passage.translationKey}`,
+    sourceLevel
+  };
+}
+
+function uniqueStrings(values) {
+  return [...new Map(values.filter(Boolean).map((value) => [String(value).toLocaleLowerCase(), String(value)])).values()];
+}
+
+function createImportedStoryLesson(parsed, record) {
+  const userStoryId = parsed.id;
+  const passages = parsed.passages.map((passage, index) => {
+    const translationKey = `user-passage:${userStoryId}:${importHash(passage.si)}`;
+    const grammarMatches = (state.data.course.scriptGrammarRules ?? []).filter((rule) => passage.tags.includes(rule.id));
+    return {
+      id: `p-${index + 1}`,
+      ...passage,
+      translationKey,
+      translationStatus: "translated",
+      translationOrigin: "imported story file",
+      aiMarked: false,
+      structure: readerSentenceStructure(passage.si),
+      grammarMatches,
+      sentences: [{
+        readerKey: `${translationKey}:sentence-1`,
+        si: passage.si,
+        grammarMatchIds: grammarMatches.map((rule) => rule.id),
+        structure: readerSentenceStructure(passage.si)
+      }]
+    };
+  });
+  const vocabulary = parsed.vocabulary.map((item, index) => ({
+    id: `v-${index + 1}`,
+    si: item.si,
+    en: item.meanings[0],
+    alternatives: item.meanings.slice(1),
+    kind: item.kind,
+    level: item.level,
+    tags: item.tags,
+    topics: item.topics,
+    grammarTags: item.grammarTags,
+    referenceLessonIds: item.referenceLessonIds,
+    translationKey: `user-vocab:${userStoryId}:${importHash(item.si)}`,
+    translationStatus: "translated",
+    translationOrigin: "imported story file",
+    aiMarked: false,
+    userStoryId,
+    sourceTitle: parsed.title
+  }));
+  const exercises = vocabulary.map((item) => importedChoiceExercise(item, vocabulary)).filter(Boolean);
+  for (let index = 0; index < vocabulary.length; index += 5) {
+    const group = vocabulary.slice(index, index + 5);
+    if (group.length < 2) continue;
+    exercises.push({
+      type: "matching",
+      prompt: "Match Sinhala words and phrases to English meanings.",
+      pairs: group.map((item) => ({ si: item.si, en: item.en, translationKey: item.translationKey, aiMarked: false })),
+      reviewKey: `matching:${userStoryId}:${Math.floor(index / 5) + 1}`,
+      skillId: `matching:${userStoryId}:${Math.floor(index / 5) + 1}`
+    });
+  }
+  const sinhalaDistractors = uniqueStrings(vocabulary.flatMap((item) => sentenceTokensForBuild(item.si)));
+  const englishDistractors = uniqueStrings(vocabulary.flatMap((item) => sentenceTokensForBuild(item.en)));
+  passages.forEach((passage, index) => {
+    const enToSi = importedSentenceExercise(passage, "en_to_si", sinhalaDistractors, parsed.level);
+    const siToEn = importedSentenceExercise(passage, "si_to_en", englishDistractors, parsed.level);
+    if (enToSi) exercises.push(enToSi);
+    if (siToEn) exercises.push(siToEn);
+    const tokens = sentenceTokensForBuild(passage.si);
+    if (tokens.length >= 2) {
+      const answer = tokens[0];
+      exercises.push({
+        type: "fill_blank",
+        prompt: ["_____", ...tokens.slice(1)].join(" "),
+        answer,
+        translation: passage.en,
+        translationKey: passage.translationKey,
+        translationStatus: passage.translationStatus,
+        aiMarked: false,
+        tags: passage.tags,
+        wordBank: uniqueStrings([answer, ...sinhalaDistractors.filter((token) => token !== answer).slice(index % 8, (index % 8) + 3)]),
+        reviewKey: `fill:${passage.translationKey}`,
+        skillId: `passage:${passage.translationKey}:fill`
+      });
+    }
+    exercises.push({
+      type: "structure",
+      prompt: passage.si,
+      translation: passage.en,
+      translationKey: passage.translationKey,
+      translationStatus: passage.translationStatus,
+      aiMarked: false,
+      tags: passage.tags,
+      structure: passage.structure,
+      reviewKey: `structure:${passage.translationKey}`,
+      skillId: `passage:${passage.translationKey}:structure`
+    });
+    exercises.push({
+      type: "speaking",
+      prompt: passage.si,
+      translation: passage.en,
+      translationKey: passage.translationKey,
+      translationStatus: passage.translationStatus,
+      aiMarked: false,
+      tags: passage.tags,
+      speaker: passage.speaker,
+      answer: "Read it aloud, then reveal the structure.",
+      reviewKey: `speaking:${passage.translationKey}`,
+      skillId: `passage:${passage.translationKey}:speaking`
+    });
+  });
+  for (let index = 0; index < vocabulary.length; index += 3) {
+    const group = vocabulary.slice(index, index + 3);
+    if (!group.length) continue;
+    exercises.push({
+      type: "response",
+      prompt: `Use one of these in a short Sinhala response: ${group.map((item) => item.si).join(", ")}`,
+      sample: `${group[0].si} = ${group[0].en}`,
+      answer: "Type or say your own short answer.",
+      reviewKey: `response:${userStoryId}:${Math.floor(index / 3) + 1}`,
+      skillId: `response:${userStoryId}:${Math.floor(index / 3) + 1}`
+    });
+  }
+  return {
+    id: userStoryId,
+    userStoryId,
+    importedByUser: true,
+    importKind: "story",
+    title: parsed.title,
+    source: `Imported on this device · ${record.fileName}`,
+    difficulty: parsed.difficulty,
+    level: parsed.level,
+    focus: parsed.topics.join(", ") || "Imported story",
+    topics: parsed.topics,
+    tags: uniqueStrings(["device-import", ...parsed.tags]),
+    grammarTags: parsed.grammarTags,
+    lineCount: parsed.passages.length,
+    vocabulary,
+    passages,
+    grammar: {},
+    grammarLessons: [],
+    exercises,
+    storyExercises: exercises,
+    xp: 20,
+    importedAt: record.importedAt
+  };
+}
+
+function integrateImportedStory(parsed, record) {
+  const lesson = createImportedStoryLesson(parsed, record);
+  const userStoryId = lesson.id;
+  state.data.lessons.push(lesson);
+  for (const item of lesson.vocabulary) {
+    for (const set of state.data.course.wordPracticeSets ?? []) {
+      if (set.id !== "words-mixed" && set.level !== item.level) continue;
+      if (!set.items.some((candidate) => candidate.translationKey === item.translationKey)) set.items.push({ ...item });
+    }
+    const baseExercise = importedChoiceExercise(item, lesson.vocabulary);
+    if (!baseExercise) continue;
+    for (const courseLesson of state.data.courseLessons) {
+      if (levelRank(item.level) > levelRank(courseLesson.level)) continue;
+      const referenceLessonId = item.referenceLessonIds.find((id) => courseLesson.referenceLessonIds?.includes(id));
+      if (!referenceLessonId) continue;
+      courseLesson.variationPool ??= [];
+      courseLesson.variationPool.push({
+        ...baseExercise,
+        id: `${courseLesson.id}-user-story-${importHash(`${userStoryId}:${item.si}`)}`,
+        sourceLessonId: userStoryId,
+        sourceTitle: lesson.title,
+        referenceLessonId,
+        topicAligned: true,
+        courseRole: "topic",
+        userStoryId,
+        subLessonId: `${courseLesson.id}-warmup`,
+        subLessonTitle: "Warm-up",
+        subLessonKind: "warmup",
+        variationPool: true
+      });
+    }
+  }
+}
+
+function openReaderDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(READER_DATABASE_NAME, READER_DATABASE_VERSION);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(READER_STORE_NAME)) request.result.createObjectStore(READER_STORE_NAME, { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("Reader storage could not be opened."));
+  });
+}
+
+function readerStoreRequest(mode, action) {
+  return openReaderDatabase().then(
+    (database) =>
+      new Promise((resolve, reject) => {
+        const transaction = database.transaction(READER_STORE_NAME, mode);
+        const request = action(transaction.objectStore(READER_STORE_NAME));
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error ?? new Error("Reader storage could not be updated."));
+        transaction.oncomplete = () => database.close();
+        transaction.onerror = () => reject(transaction.error ?? new Error("Reader storage could not be updated."));
+      })
+  );
+}
+
+async function loadReaderDocuments() {
+  if (!("indexedDB" in window)) {
+    console.warn("IndexedDB is unavailable; personal Reader imports cannot be restored.");
+    return [];
+  }
+  try {
+    const records = await readerStoreRequest("readonly", (store) => store.getAll());
+    return records
+      .filter((record) => record?.document?.id && Array.isArray(record.document.passages) && Array.isArray(record.document.vocabulary))
+      .sort((a, b) => String(b.importedAt ?? "").localeCompare(String(a.importedAt ?? "")))
+      .map((record) => record.document);
+  } catch (error) {
+    console.warn("Could not restore Reader imports.", error);
+    state.readerImportMessage = "Saved Reader imports could not be opened on this device.";
+    state.readerImportError = true;
+    return [];
+  }
+}
+
+function selectedReaderDocument() {
+  return state.readerDocuments.find((document) => document.id === state.currentReaderDocumentId) ?? state.readerDocuments[0] ?? null;
+}
+
+function readerNameFromFileName(fileName) {
+  return String(fileName ?? "").replace(/\.(json|md)$/i, "").replace(/[-_]+/g, " ").trim();
+}
+
+function renderReaderImportMessage() {
+  els.readerImportMessage.textContent = state.readerImportMessage;
+  els.readerImportMessage.hidden = !state.readerImportMessage;
+  els.readerImportMessage.classList.toggle("is-error", state.readerImportError);
+}
+
+function renderReader() {
+  const document = selectedReaderDocument();
+  els.readerDocumentSelect.innerHTML = state.readerDocuments.length
+    ? state.readerDocuments.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)} · ${item.passages.length} lines</option>`).join("")
+    : `<option value="">No imported transcript</option>`;
+  els.readerDocumentSelect.value = document?.id ?? "";
+  els.readerDocumentSelect.disabled = !document;
+  els.readerRemoveButton.disabled = !document;
+  renderReaderImportMessage();
+  els.readerContent.innerHTML = document
+    ? readerDocumentHtml(document)
+    : `<div class="note-band"><h3>Import a translated transcript to begin</h3><p>Choose a transcript.json or translated Markdown file. The original stays untouched; this device keeps a private reader copy.</p></div>`;
+  bindReaderEvents(document);
+}
+
+function readerDocumentHtml(document) {
+  let previousSpeaker = null;
+  const lines = document.passages
+    .map((line) => {
+      const heading = line.speaker !== previousSpeaker ? `<h3 class="reader-speaker">${escapeHtml(line.speaker)}</h3>` : "";
+      previousSpeaker = line.speaker;
+      return `${heading}<article class="personal-reader-line" data-reader-line="${escapeHtml(line.id)}">
+        <p class="reader-si">${renderReaderTokens(line, document)}</p>
+        ${readerLookupHtml(line, document)}
+      </article>`;
+    })
+    .join("");
+  return `<article class="personal-reader-document"><div class="personal-reader-heading"><div><p class="eyebrow">Personal transcript</p><h2>${escapeHtml(document.title)}</h2></div><span>${document.passages.length} lines · ${document.vocabulary.length} glossary entries</span></div><div class="personal-reader-lines">${lines}</div></article>`;
+}
+
+function renderReaderTokens(line, document) {
+  return line.si
+    .split(/(\s+|[.,!?;:()[\]'"“”‘’…]+)/)
+    .filter(Boolean)
+    .map((token) => {
+      if (!/[\u0D80-\u0DFF]/.test(token)) return escapeHtml(token);
+      const word = readerTokens(token)[0] ?? "";
+      const selected = state.readerLookup?.documentId === document.id && state.readerLookup?.lineId === line.id && state.readerLookup?.word === word;
+      return `<button class="reader-word-token ${selected ? "selected" : ""}" type="button" data-reader-word="${escapeHtml(word)}" data-reader-line-id="${escapeHtml(line.id)}">${escapeHtml(token)}</button>`;
+    })
+    .join("");
+}
+
+function readerMatchesForWord(document, word) {
+  const normalized = readerTokens(word)[0] ?? "";
+  const entries = document.vocabulary ?? [];
+  const exact = entries.filter((item) => readerTokens(item.si).join(" ") === normalized);
+  const phrases = entries.filter((item) => {
+    const tokens = readerTokens(item.si);
+    return tokens.length > 1 && tokens.includes(normalized);
+  });
+  return { exact: dedupeReaderVocabulary(exact), phrases: dedupeReaderVocabulary(phrases) };
+}
+
+function dedupeReaderVocabulary(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.si}:${(item.meanings ?? []).join("|")}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function readerMeaningHtml(meanings) {
+  return `<span class="reader-meanings">${(meanings ?? []).map((meaning) => `<span>${escapeHtml(meaning)}</span>`).join("")}</span>`;
+}
+
+function readerLookupHtml(line, document) {
+  const lookup = state.readerLookup;
+  if (!lookup || lookup.documentId !== document.id || lookup.lineId !== line.id) return "";
+  const { exact, phrases } = readerMatchesForWord(document, lookup.word);
+  const fullTranslationVisible = Boolean(lookup.fullTranslationVisible);
+  return `<section class="reader-lookup-card" aria-live="polite">
+    <div class="reader-lookup-heading"><strong>${escapeHtml(lookup.word)}</strong><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
+    ${exact.length ? `<div><p class="reader-lookup-label">Meanings</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this word.</p>`}
+    ${phrases.length ? `<div class="reader-related-phrases"><p class="reader-lookup-label">Related phrases in this transcript</p>${phrases.map((item) => `<div><b>${escapeHtml(item.si)}</b>${readerMeaningHtml(item.meanings)}</div>`).join("")}</div>` : ""}
+    <button class="reader-line-translation-toggle" type="button" data-toggle-reader-line-translation>${fullTranslationVisible ? "Hide full line translation" : "Show full line translation"}</button>
+    ${fullTranslationVisible ? `<p class="reader-line-translation">${escapeHtml(line.en)}</p>` : ""}
+  </section>`;
+}
+
+function bindReaderEvents(document) {
+  if (!document) return;
+  els.readerContent.querySelectorAll("[data-reader-word]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const sameSelection =
+        state.readerLookup?.documentId === document.id &&
+        state.readerLookup?.lineId === button.dataset.readerLineId &&
+        state.readerLookup?.word === button.dataset.readerWord;
+      state.readerLookup = sameSelection
+        ? null
+        : { documentId: document.id, lineId: button.dataset.readerLineId, word: button.dataset.readerWord, fullTranslationVisible: false };
+      renderReader();
+    });
+  });
+  els.readerContent.querySelector("[data-close-reader-lookup]")?.addEventListener("click", () => {
+    state.readerLookup = null;
+    renderReader();
+  });
+  els.readerContent.querySelector("[data-toggle-reader-line-translation]")?.addEventListener("click", () => {
+    if (state.readerLookup) state.readerLookup.fullTranslationVisible = !state.readerLookup.fullTranslationVisible;
+    renderReader();
+  });
+}
+
+function selectReaderFile(event) {
+  const [file] = event.target.files;
+  state.pendingReaderFile = file ?? null;
+  if (file) els.readerImportName.value = readerNameFromFileName(file.name);
+  state.readerImportMessage = file ? `Ready to import ${file.name}. Choose a saved name, then import it.` : "";
+  state.readerImportError = false;
+  renderReaderImportMessage();
+}
+
+async function importReaderFile() {
+  const file = state.pendingReaderFile;
+  if (!file) {
+    state.readerImportMessage = "Choose a transcript.json or translated Markdown file first.";
+    state.readerImportError = true;
+    renderReaderImportMessage();
+    return;
+  }
+  try {
+    if (!/\.(json|md)$/i.test(file.name)) throw new Error("Choose a transcript.json or translated transcript Markdown (.md) file.");
+    if (file.size > 10_000_000) throw new Error("Reader files must be 10 MB or smaller.");
+    const document = parseReaderImport(await file.text(), { fileName: file.name, name: els.readerImportName.value });
+    const record = { id: document.id, importedAt: new Date().toISOString(), document };
+    if (!("indexedDB" in window)) throw new Error("This browser does not support device-local Reader storage.");
+    await readerStoreRequest("readwrite", (store) => store.put(record));
+    state.readerDocuments = [document, ...state.readerDocuments.filter((item) => item.id !== document.id)];
+    state.currentReaderDocumentId = document.id;
+    state.pendingReaderFile = null;
+    els.readerImportFile.value = "";
+    state.readerImportMessage = `Imported ${document.title}: ${document.passages.length} lines and ${document.vocabulary.length} glossary entries.${state.readerDocuments.some((item) => item.id === document.id) ? " Re-import this name any time to replace it." : ""}`;
+    state.readerImportError = false;
+    state.readerLookup = null;
+    renderReader();
+  } catch (error) {
+    state.readerImportMessage = error.message || "That reader file could not be imported.";
+    state.readerImportError = true;
+    renderReaderImportMessage();
+  }
+}
+
+async function removeCurrentReaderDocument() {
+  const document = selectedReaderDocument();
+  if (!document) return;
+  if (!window.confirm(`Remove “${document.title}” from this device? The original file will not be deleted.`)) return;
+  try {
+    await readerStoreRequest("readwrite", (store) => store.delete(document.id));
+    state.readerDocuments = state.readerDocuments.filter((item) => item.id !== document.id);
+    state.currentReaderDocumentId = state.readerDocuments[0]?.id ?? null;
+    state.readerLookup = null;
+    state.readerImportMessage = `Removed ${document.title} from this device.`;
+    state.readerImportError = false;
+    renderReader();
+  } catch (error) {
+    state.readerImportMessage = error.message || "That reader file could not be removed.";
+    state.readerImportError = true;
+    renderReaderImportMessage();
+  }
+}
+
 function renderScripts() {
+  renderStoryImportMessage();
   const term = els.scriptSearch.value.trim().toLowerCase();
   const lessons = state.data.lessons.filter((lesson) => {
     const haystack = `${lesson.title} ${lesson.focus} ${(lesson.topics ?? []).join(" ")} ${(lesson.tags ?? []).join(" ")} ${(lesson.grammarTags ?? []).join(" ")} ${lesson.passages.map((passage) => `${passage.speaker} ${(passage.tags ?? []).join(" ")}`).join(" ")} ${lesson.vocabulary.map((item) => `${item.si} ${item.en} ${(item.tags ?? []).join(" ")}`).join(" ")}`.toLowerCase();
@@ -918,6 +1543,7 @@ function renderScripts() {
           <div class="reader-tools">
             <button class="small-action" type="button" data-copy-lesson="${lesson.id}">${lesson.passages.length ? "Copy full script" : "Copy vocabulary notes"}</button>
             ${storyExerciseBank(lesson).length ? `<button class="small-action" type="button" data-practice-story="${lesson.id}">Practice this story</button>` : ""}
+            ${lesson.importedByUser ? `<button class="small-action danger-action" type="button" data-remove-imported-story="${escapeHtml(lesson.id)}">Forget imported story</button>` : ""}
             <button class="small-action" type="button" data-continue-course>Resume numbered course</button>
           </div>
           ${
@@ -981,6 +1607,9 @@ function renderScripts() {
   });
   els.scriptList.querySelectorAll("[data-practice-story]").forEach((button) => {
     button.addEventListener("click", () => startStoryLesson(button.dataset.practiceStory));
+  });
+  els.scriptList.querySelectorAll("[data-remove-imported-story]").forEach((button) => {
+    button.addEventListener("click", () => forgetImportedStory(button.dataset.removeImportedStory));
   });
   bindWordLookups(els.scriptList);
 }
@@ -1502,7 +2131,7 @@ function initializeCurriculumTranslations() {
         markerField: "aiMarked",
         statusField: "translationStatus",
         originField: "translationOrigin",
-        kind: "word",
+        kind: item.kind === "phrase" ? "phrase" : "word",
         defaultAiMarked: false,
         defaultStatus: "translated",
         defaultOrigin: "source notes"
@@ -1676,7 +2305,7 @@ function applyTranslationOverrides() {
       }
       passagesByKey.set(passage.translationKey, passage);
     }
-    for (const exercise of lesson.exercises) {
+    for (const exercise of [...lesson.exercises, ...(lesson.storyExercises ?? [])]) {
       const passage = passagesByKey.get(exercise.translationKey);
       if (!passage) continue;
       if (exercise.type === "sentence_build") syncSentenceBuildTranslation(exercise, passage);
@@ -1786,7 +2415,7 @@ function syncCurriculumExercises() {
     conversation.replyAiMarked = source.replyAiMarked;
   }
   const exerciseGroups = [
-    ...state.data.lessons.map((lesson) => lesson.exercises),
+    ...state.data.lessons.flatMap((lesson) => [lesson.exercises, lesson.storyExercises ?? []]),
     state.data.course.reviewExercises ?? [],
     ...(state.data.course.referenceLessons ?? []).flatMap((lesson) => [
       lesson.exercises,
@@ -3063,6 +3692,7 @@ function setView(view) {
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === view));
   document.querySelectorAll(".view").forEach((panel) => panel.classList.toggle("active", panel.id === `${view}View`));
   if (view === "words") renderWords();
+  if (view === "reader") renderReader();
   if (view === "grammar") renderGrammar();
   if (view === "translations") renderTranslationEditor();
   if (view === "progress") renderStats();

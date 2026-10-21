@@ -459,6 +459,297 @@ h3 {
   width: 100%;
 }
 
+.story-import-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px dashed rgba(15, 118, 110, 0.38);
+  border-radius: 8px;
+  background: rgba(232, 243, 241, 0.58);
+}
+
+.reader-import-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px dashed rgba(15, 118, 110, 0.38);
+  border-radius: 8px;
+  background: rgba(232, 243, 241, 0.58);
+}
+
+.reader-import-panel > div:first-child {
+  grid-column: 1 / -1;
+}
+
+.reader-import-panel .story-file-input {
+  width: 100%;
+}
+
+.reader-import-panel p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.reader-import-name,
+.reader-document-controls label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.reader-import-name input,
+.reader-document-controls select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.reader-document-controls {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.reader-document-controls label {
+  width: min(100%, 420px);
+}
+
+.reader-content {
+  min-width: 0;
+}
+
+.personal-reader-document {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.personal-reader-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 22px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.personal-reader-heading h2,
+.reader-speaker {
+  margin: 0;
+}
+
+.personal-reader-heading > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.personal-reader-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.reader-speaker {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(24, 33, 31, 0.08);
+  font-size: 1rem;
+}
+
+.personal-reader-lines > .reader-speaker:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.personal-reader-line {
+  position: relative;
+  padding: 2px 0 8px 20px;
+}
+
+.personal-reader-line::before {
+  position: absolute;
+  left: 5px;
+  top: 12px;
+  content: "•";
+  color: var(--teal);
+}
+
+.personal-reader-line .reader-si {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.reader-word-token {
+  display: inline;
+  min-height: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 1px 2px;
+  text-decoration: underline;
+  text-decoration-color: rgba(15, 118, 110, 0.26);
+  text-underline-offset: 4px;
+}
+
+.reader-word-token:hover,
+.reader-word-token:focus,
+.reader-word-token.selected {
+  background: #e8f3f1;
+  outline: 2px solid rgba(15, 118, 110, 0.22);
+}
+
+.reader-lookup-card {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 4px;
+  padding: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.32);
+  border-left: 4px solid var(--teal);
+  border-radius: 8px;
+  background: #f8fcfb;
+}
+
+.reader-lookup-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: "Noto Sans Sinhala", "Iskoola Pota", "Malithi Web", system-ui, sans-serif;
+  font-size: 1.05rem;
+}
+
+.reader-lookup-label,
+.reader-lookup-empty {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.reader-meanings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reader-meanings span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e8f3f1;
+  color: var(--teal-dark);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.reader-related-phrases {
+  display: grid;
+  gap: 8px;
+  max-height: 210px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.reader-related-phrases > div {
+  display: grid;
+  gap: 5px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(24, 33, 31, 0.08);
+}
+
+.reader-line-translation-toggle {
+  justify-self: start;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--teal-dark);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reader-line-translation {
+  margin: -2px 0 0;
+  padding: 9px 10px;
+  border-radius: 6px;
+  background: white;
+  color: var(--ink);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.story-import-panel p,
+.story-import-message {
+  margin: 4px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.story-import-message {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 4px solid var(--teal);
+  border-radius: 4px;
+  background: rgba(232, 243, 241, 0.8);
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.story-file-input {
+  width: min(100%, 220px);
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.story-file-input::file-selector-button {
+  min-height: 44px;
+  margin-right: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #e8f3f1;
+  color: var(--teal-dark);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.story-import-message.is-error {
+  border-left-color: var(--coral);
+  background: rgba(239, 115, 93, 0.1);
+  color: #9f321f;
+}
+
+.danger-action {
+  background: rgba(239, 115, 93, 0.12);
+  color: #8d2d1d;
+}
+
 .practice-card {
   min-height: 430px;
   padding: 18px;
@@ -1659,15 +1950,25 @@ h3 {
   }
 
   .script-controls,
+  .story-import-panel,
+  .reader-import-panel,
   .reader-grammar-heading,
   .grammar-row-heading {
     grid-template-columns: 1fr;
   }
 
   .script-controls,
+  .story-import-panel,
+  .reader-import-panel,
   .reader-grammar-heading,
   .grammar-row-heading {
     display: grid;
+  }
+
+  .story-import-panel .small-action,
+  .reader-import-panel .small-action,
+  .story-file-input {
+    width: 100%;
   }
 
   .lesson-node {
@@ -1681,7 +1982,7 @@ h3 {
 
   .tabs {
     gap: 4px;
-    grid-template-columns: repeat(7, 92px);
+    grid-template-columns: repeat(8, 92px);
   }
 
   .tab {

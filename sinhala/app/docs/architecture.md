@@ -1,6 +1,6 @@
 # App Architecture
 
-This project is a static, phone-friendly web app built around the existing `Immersion/` folder. It has no database and no required server backend. Progress is stored in the browser with `localStorage`.
+This project is a static, phone-friendly web app built around the existing `Immersion/` folder. It has no required server backend. Progress is stored in the browser with `localStorage`; personal Reader imports use browser IndexedDB so longer transcripts remain device-local without competing with progress storage.
 
 For implementation-oriented navigation, use [Codebase Map](codebase-map.md). For coding conventions, migrations, and validation, use [Development Guide](development-guide.md). [Language Sources](language-sources.md) records the external research basis. Repository-wide agent requirements live in [AGENTS.md](../AGENTS.md).
 
@@ -36,6 +36,8 @@ For implementation-oriented navigation, use [Codebase Map](codebase-map.md). For
 | `app/index.html` | App shell |
 | `app/styles.css` | Mobile-first visual system |
 | `app/app.js` | Rendering, quiz flow, progress, script search |
+| `app/story-import.js` | Browser-side parser and validator for prepared story Markdown |
+| `app/reader-import.js` | Browser-side normalizer for personal transcriber JSON and translated Markdown reader files |
 | `app/sw.js` | Service worker cache |
 | `app/precache-assets.json` | Required offline app, data, and documentation asset list |
 | `app/manifest.webmanifest` | Installable web app metadata |
@@ -67,7 +69,8 @@ flowchart LR
   B --> F["lessons.json: source, numbered, and reference lessons"]
   B --> R["generated grammar and course-library docs"]
   F --> G["Course, practice, words, reader, library, translations, progress"]
-  G --> H["localStorage progress and translation edits"]
+  G --> H["localStorage progress, translation edits, and imported stories"]
+  G --> H2["IndexedDB personal Reader imports"]
 ```
 
 The generator looks for:
@@ -89,7 +92,7 @@ The generator looks for:
 
 ## Runtime Lifecycle
 
-The browser has no framework or router. `app/app.js` loads one generated JSON payload and renders seven view containers from shared module state.
+The browser has no framework or router. `app/app.js` loads one generated JSON payload, imports dependency-free Story and Reader parsers, restores saved story Markdown plus personal Reader documents, and renders eight view containers from shared module state.
 
 ```mermaid
 sequenceDiagram
@@ -98,8 +101,10 @@ sequenceDiagram
   participant Data as data/lessons.json
   participant Store as localStorage
   Browser->>App: Load ES module
-  App->>Store: Read progress and translation overrides
+  App->>Store: Read progress, translation overrides, and imported stories
+  App->>Store: Restore personal Reader documents from IndexedDB
   App->>Data: Fetch generated curriculum
+  App->>App: Validate and merge device-imported stories
   App->>App: Initialize translation adapters
   App->>App: Overlay edits and synchronize exercise copies
   App->>Store: Restore numbered-course checkpoint when present
@@ -223,6 +228,10 @@ A passage from a structured story import can also carry descriptive `tags`. The 
 
 A structured source vocabulary item can additionally carry `kind`, `level`, `topics`, `grammarTags`, `referenceLessonIds`, and its complete `tags` list. The story importer classifies words and multiword phrases separately, assigns their own difficulty rather than inheriting the whole story's level, and maps semantic or grammatical signals to existing Library lesson IDs. Course warm-up selection treats a matching tagged source item as topic-aligned; Words places it in the corresponding level drill. These routing tags remain descriptive metadata and do not alter translation or SRS identities.
 
+The same normalized Markdown has two delivery paths. Build imports remain repository-owned: the file lives in `Immersion/` and `build-lessons.mjs` emits it into generated data. Browser imports are learner-owned: Stories validates the selected `.md`, stores its source text under `sinhala-imported-stories`, and rebuilds a device-local lesson at startup. Runtime integration adds the full narrative only to Stories/story practice, adds vocabulary to the mixed and matching-difficulty Words sets, and adds vocabulary warm-ups only to Course lessons whose reference topic matches a `lesson:` tag and whose level is not below the item's difficulty. It does not change generated JSON or repository files.
+
+Reader imports are a separate personal path. Reader accepts a transcriber `transcript.json` (`speakers` and translated `segments`) or the generated translated Markdown layout with bold speaker headings, Sinhala bullets, nested `Sinhala = meaning` rows, and a final English child line. The chosen import name is the case-insensitive replacement identity. It displays one continuous Sinhala-first document; tapping a word opens an inline card below its line with direct meanings, related phrase meanings, and an optional full segment translation. Personal Reader documents stay in IndexedDB and never enter generated data, practice, translation review, or Course state.
+
 `translationStatus` is `translated` for script notes, `ai-translated`, `reviewed` for a local user override, or `draft-gloss` for a newly imported line still awaiting translation.
 
 Generated exercise types:
@@ -330,6 +339,8 @@ The same screen also exposes the transliteration-rate control. Sinhala script re
 The story reader lets you search source scripts, open their full reader views, and optionally practice exercises grouped by one source. Story practice samples from `storyExercises`, which can include all source vocabulary, matching chunks, fill blanks, structure cards, speaking cards, responses, and bidirectional sentence builders from suitable short bilingual passages or phrase notes. Finishing three story rounds records it separately, then offers Continue for the same story or Exit back to Stories; unseen cards remain preferred until the available bank has been covered.
 
 The Stories header includes a grammar-order toggle. Normal mode preserves the original source block order. Grouped mode splits each displayed block into generated sentence fragments, assigns each sentence to its most advanced detected grammar match, then renders the groups from lowest rank to highest rank so the same script can be read from easier structures toward harder ones.
+
+The Stories screen also accepts prepared `.md` files up to 2 MB. Import is device-local and works without a backend: valid records persist across reloads and remain available offline while browser storage survives. Reimporting the same title and filename replaces its local version. **Forget imported story** removes its runtime lesson, word-bank entries, and Course variations from that browser without deleting the original file. The repository build import remains available independently.
 
 Every reader line has:
 

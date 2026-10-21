@@ -39,6 +39,7 @@
           <button class="tab" data-view="practice" type="button">Practice</button>
           <button class="tab" data-view="words" type="button">Words</button>
           <button class="tab" data-view="scripts" type="button">Stories</button>
+          <button class="tab" data-view="reader" type="button">Reader</button>
           <button class="tab" data-view="grammar" type="button">Library</button>
           <button class="tab" data-view="translations" type="button">Translations</button>
           <button class="tab" data-view="progress" type="button">Progress</button>
@@ -98,7 +99,39 @@
               <button id="storyGrammarOrderToggle" class="small-action" type="button" aria-pressed="false">Group by grammar</button>
             </div>
           </div>
+          <div class="story-import-panel">
+            <div>
+              <strong>Import a prepared story</strong>
+              <p>Choose an importable Markdown file. It stays on this device and contributes to Stories, Words, and matching Course topics.</p>
+            </div>
+            <input id="importStoryFile" class="story-file-input" type="file" accept=".md,text/markdown,text/plain" aria-label="Import story Markdown">
+          </div>
+          <p id="storyImportMessage" class="story-import-message" role="status" aria-live="polite" hidden></p>
           <div id="scriptList" class="script-list"></div>
+        </section>
+
+        <section id="readerView" class="view" aria-live="polite">
+          <div class="practice-header">
+            <div>
+              <p class="eyebrow">Personal transcript reader</p>
+              <h2>Reader</h2>
+            </div>
+          </div>
+          <div class="reader-import-panel">
+            <div>
+              <strong>Import a translated transcript</strong>
+              <p>Choose a transcriber <code>transcript.json</code> or the matching translated Markdown. Imported files stay on this device.</p>
+            </div>
+            <input id="readerImportFile" class="story-file-input" type="file" accept=".json,application/json,.md,text/markdown,text/plain" aria-label="Choose a transcript JSON or translated Markdown file">
+            <label class="reader-import-name">Save as <input id="readerImportName" type="text" placeholder="Transcript name" aria-label="Name this reader import"></label>
+            <button id="readerImportButton" class="small-action" type="button">Import or replace</button>
+          </div>
+          <p id="readerImportMessage" class="story-import-message" role="status" aria-live="polite" hidden></p>
+          <div class="reader-document-controls">
+            <label>Reading <select id="readerDocumentSelect" aria-label="Choose an imported transcript"></select></label>
+            <button id="readerRemoveButton" class="small-action danger-action" type="button">Remove from device</button>
+          </div>
+          <div id="readerContent" class="reader-content"></div>
         </section>
 
         <section id="grammarView" class="view" aria-live="polite">
