@@ -6,6 +6,7 @@ const IMPORTED_STORY_NOTICE_KEY = "sinhala-story-import-notice";
 const READER_DATABASE_NAME = "sinhala-reader-imports";
 const READER_DATABASE_VERSION = 1;
 const READER_STORE_NAME = "documents";
+const READER_FALLBACK_STORAGE_KEY = "sinhala-reader-imports-fallback";
 const initialStoryImportNotice = loadStoryImportNotice();
 
 const state = {
@@ -1280,6 +1281,10 @@ function integrateImportedStory(parsed, record) {
 
 function openReaderDatabase() {
   return new Promise((resolve, reject) => {
+    if (!readerDatabaseAvailable()) {
+      reject(new Error("IndexedDB is unavailable in this browser."));
+      return;
+    }
     const request = indexedDB.open(READER_DATABASE_NAME, READER_DATABASE_VERSION);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(READER_STORE_NAME)) request.result.createObjectStore(READER_STORE_NAME, { keyPath: "id" });
@@ -1287,6 +1292,34 @@ function openReaderDatabase() {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("Reader storage could not be opened."));
   });
+}
+
+function readerDatabaseAvailable() {
+  return typeof indexedDB !== "undefined" && indexedDB && typeof indexedDB.open === "function";
+}
+
+function loadReaderFallbackRecords() {
+  try {
+    const records = JSON.parse(localStorage.getItem(READER_FALLBACK_STORAGE_KEY));
+    return Array.isArray(records) ? records : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReaderFallbackRecords(records) {
+  localStorage.setItem(READER_FALLBACK_STORAGE_KEY, JSON.stringify(records));
+}
+
+async function saveReaderRecord(record) {
+  if (readerDatabaseAvailable()) return readerStoreRequest("readwrite", (store) => store.put(record));
+  const records = loadReaderFallbackRecords();
+  saveReaderFallbackRecords([...records.filter((item) => item?.id !== record.id), record]);
+}
+
+async function deleteReaderRecord(id) {
+  if (readerDatabaseAvailable()) return readerStoreRequest("readwrite", (store) => store.delete(id));
+  saveReaderFallbackRecords(loadReaderFallbackRecords().filter((item) => item?.id !== id));
 }
 
 function readerStoreRequest(mode, action) {
@@ -1304,12 +1337,8 @@ function readerStoreRequest(mode, action) {
 }
 
 async function loadReaderDocuments() {
-  if (!("indexedDB" in window)) {
-    console.warn("IndexedDB is unavailable; personal Reader imports cannot be restored.");
-    return [];
-  }
   try {
-    const records = await readerStoreRequest("readonly", (store) => store.getAll());
+    const records = readerDatabaseAvailable() ? await readerStoreRequest("readonly", (store) => store.getAll()) : loadReaderFallbackRecords();
     return records
       .filter((record) => record?.document?.id && Array.isArray(record.document.passages) && Array.isArray(record.document.vocabulary))
       .sort((a, b) => String(b.importedAt ?? "").localeCompare(String(a.importedAt ?? "")))
@@ -1482,7 +1511,7 @@ async function saveReaderWordMeaning(document, word, value) {
   document.vocabulary.forEach(update);
   document.passages.forEach((line) => line.vocabulary.forEach(update));
   try {
-    await readerStoreRequest("readwrite", (store) => store.put({ id: document.id, importedAt: new Date().toISOString(), document }));
+    await saveReaderRecord({ id: document.id, importedAt: new Date().toISOString(), document });
     state.readerDocuments = state.readerDocuments.map((item) => (item.id === document.id ? document : item));
     state.readerLookup = { ...state.readerLookup, editing: false };
     state.readerImportMessage = `Saved the meaning for ${word} in ${document.title}.`;
@@ -1517,8 +1546,7 @@ async function importReaderFile() {
     if (file.size > 10_000_000) throw new Error("Reader files must be 10 MB or smaller.");
     const document = parseReaderImport(await file.text(), { fileName: file.name, name: els.readerImportName.value });
     const record = { id: document.id, importedAt: new Date().toISOString(), document };
-    if (!("indexedDB" in window)) throw new Error("This browser does not support device-local Reader storage.");
-    await readerStoreRequest("readwrite", (store) => store.put(record));
+    await saveReaderRecord(record);
     state.readerDocuments = [document, ...state.readerDocuments.filter((item) => item.id !== document.id)];
     state.currentReaderDocumentId = null;
     state.pendingReaderFile = null;
@@ -1539,7 +1567,7 @@ async function removeReaderDocument(documentId) {
   if (!document) return;
   if (!window.confirm(`Remove “${document.title}” from this device? The original file will not be deleted.`)) return;
   try {
-    await readerStoreRequest("readwrite", (store) => store.delete(document.id));
+    await deleteReaderRecord(document.id);
     state.readerDocuments = state.readerDocuments.filter((item) => item.id !== document.id);
     if (state.currentReaderDocumentId === document.id) state.currentReaderDocumentId = null;
     state.readerLookup = null;
