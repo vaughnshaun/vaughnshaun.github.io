@@ -1450,8 +1450,8 @@ function readerLookupHtml(line, document) {
   const fullTranslationVisible = Boolean(lookup.fullTranslationVisible);
   return `<section class="reader-lookup-card" aria-live="polite">
     <div class="reader-lookup-heading"><strong>${escapeHtml(lookup.word)}</strong><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
-    ${exact.length ? `<div><p class="reader-lookup-label">Meanings</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this word.</p>`}
-    ${exact.length ? (lookup.editing ? `<label class="reader-meaning-editor">Edit meanings <small>Separate alternatives with |</small><input id="readerMeaningInput" value="${escapeHtml(exact[0].meanings.join(" | "))}"></label><div class="reader-edit-actions"><button class="small-action" type="button" data-save-reader-meaning>Save meaning</button><button class="small-action" type="button" data-cancel-reader-meaning>Cancel</button></div>` : `<button class="reader-line-translation-toggle" type="button" data-edit-reader-meaning>Edit word meaning</button>`) : ""}
+    ${exact.length ? `<div><p class="reader-lookup-label">Meanings</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this word yet.</p>`}
+    ${lookup.editing ? `<label class="reader-meaning-editor">${exact.length ? "Edit meanings" : "Add meanings"} <small>Separate alternatives with |</small><input id="readerMeaningInput" value="${escapeHtml(exact[0]?.meanings.join(" | ") ?? "")}" placeholder="English meaning"></label><div class="reader-edit-actions"><button class="small-action" type="button" data-save-reader-meaning>${exact.length ? "Save meaning" : "Add meaning"}</button><button class="small-action" type="button" data-cancel-reader-meaning>Cancel</button></div>` : `<button class="reader-line-translation-toggle" type="button" data-edit-reader-meaning>${exact.length ? "Edit word meaning" : "Add word meaning"}</button>`}
     <button class="reader-line-translation-toggle" type="button" data-toggle-reader-line-translation>${fullTranslationVisible ? "Hide full line translation" : "Show full line translation"}</button>
     ${fullTranslationVisible ? `<p class="reader-line-translation">${escapeHtml(line.en)}</p>` : ""}
   </section>`;
@@ -1505,11 +1505,20 @@ async function saveReaderWordMeaning(document, word, value) {
     return;
   }
   const normalized = readerTokens(word)[0] ?? "";
+  let found = false;
   const update = (item) => {
-    if (readerTokens(item.si).join(" ") === normalized) item.meanings = [...new Set(meanings)];
+    if (readerTokens(item.si).join(" ") === normalized) {
+      item.meanings = [...new Set(meanings)];
+      found = true;
+    }
   };
   document.vocabulary.forEach(update);
   document.passages.forEach((line) => line.vocabulary.forEach(update));
+  if (!found) {
+    const item = { si: word, meanings: [...new Set(meanings)] };
+    document.vocabulary.push(item);
+    document.passages.find((line) => line.id === state.readerLookup?.lineId)?.vocabulary.push({ ...item });
+  }
   try {
     await saveReaderRecord({ id: document.id, importedAt: new Date().toISOString(), document });
     state.readerDocuments = state.readerDocuments.map((item) => (item.id === document.id ? document : item));
