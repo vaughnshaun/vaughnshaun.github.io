@@ -674,6 +674,51 @@ h3 {
   font-size: 1.05rem;
 }
 
+.reader-lookup-pager {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.reader-lookup-pager > div {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.reader-lookup-pager strong {
+  overflow-wrap: anywhere;
+}
+
+.reader-lookup-pager span {
+  color: var(--muted);
+  font-family: system-ui, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.reader-lookup-arrow {
+  display: grid;
+  width: 44px;
+  min-height: 44px;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  border-radius: 7px;
+  background: white;
+  color: var(--teal-dark);
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.reader-lookup-arrow:disabled {
+  border-color: var(--line);
+  background: #f2f3f1;
+  color: #a0a7a4;
+}
+
 .reader-lookup-label,
 .reader-lookup-empty {
   margin: 0 0 5px;
@@ -697,26 +742,6 @@ h3 {
   color: var(--teal-dark);
   font-size: 0.84rem;
   font-weight: 700;
-}
-
-.reader-related-phrases {
-  display: grid;
-  gap: 7px;
-  padding-top: 2px;
-}
-
-.reader-related-phrase {
-  display: grid;
-  gap: 5px;
-  padding: 9px 10px;
-  border: 1px solid rgba(15, 118, 110, 0.16);
-  border-radius: 7px;
-  background: white;
-}
-
-.reader-related-phrase strong {
-  font-family: "Noto Sans Sinhala", "Iskoola Pota", "Malithi Web", system-ui, sans-serif;
-  font-size: 0.92rem;
 }
 
 .reader-line-translation-toggle {

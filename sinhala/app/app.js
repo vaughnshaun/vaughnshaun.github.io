@@ -1416,20 +1416,31 @@ function renderReaderTokens(line, document) {
     .map((token) => {
       if (!/[\u0D80-\u0DFF]/.test(token)) return escapeHtml(token);
       const word = readerTokens(token)[0] ?? "";
-      const selected = state.readerLookup?.documentId === document.id && state.readerLookup?.lineId === line.id && state.readerLookup?.term === word;
+      const selected = state.readerLookup?.documentId === document.id && state.readerLookup?.lineId === line.id && state.readerLookup?.word === word;
       return `<button class="reader-word-token ${selected ? "selected" : ""}" type="button" data-reader-word="${escapeHtml(word)}" data-reader-line-id="${escapeHtml(line.id)}">${escapeHtml(token)}</button>`;
     })
     .join("");
 }
 
-function readerPhrasesForWord(document, word) {
+function readerLookupTerms(document, line, word) {
   const normalized = readerTokens(word)[0] ?? "";
-  return dedupeReaderVocabulary(
-    (document.vocabulary ?? []).filter((item) => {
+  const lineTokens = readerTokens(line.si);
+  const phrases = dedupeReaderVocabulary(
+    (document.vocabulary ?? [])
+      .filter((item) => {
       const tokens = readerTokens(item.si);
-      return tokens.length > 1 && tokens.includes(normalized);
-    })
+        if (tokens.length < 2 || !tokens.includes(normalized) || tokens.length > lineTokens.length) return false;
+        return lineTokens.some((_, start) => tokens.every((token, index) => token === lineTokens[start + index]));
+      })
+      .sort((left, right) => readerTokens(left.si).length - readerTokens(right.si).length || left.si.localeCompare(right.si))
   );
+  const seen = new Set();
+  return [word, ...phrases.map((item) => item.si)].filter((term) => {
+    const key = readerTokens(term).join(" ");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function readerMatchesForTerm(document, term) {
@@ -1456,14 +1467,17 @@ function readerMeaningHtml(meanings) {
 function readerLookupHtml(line, document) {
   const lookup = state.readerLookup;
   if (!lookup || lookup.documentId !== document.id || lookup.lineId !== line.id) return "";
-  const exact = readerMatchesForTerm(document, lookup.term);
+  const terms = readerLookupTerms(document, line, lookup.word);
+  const activeIndex = Math.min(Math.max(lookup.termIndex ?? 0, 0), terms.length - 1);
+  const term = terms[activeIndex];
+  const exact = readerMatchesForTerm(document, term);
   const fullTranslationVisible = Boolean(lookup.fullTranslationVisible);
-  const isPhrase = readerTokens(lookup.term).length > 1;
-  const phrases = isPhrase ? [] : readerPhrasesForWord(document, lookup.term);
+  const isPhrase = readerTokens(term).length > 1;
+  const canGoBack = activeIndex > 0;
+  const canGoForward = activeIndex < terms.length - 1;
   return `<section class="reader-lookup-card" aria-live="polite">
-    <div class="reader-lookup-heading"><strong>${escapeHtml(lookup.term)}</strong><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
+    <div class="reader-lookup-heading"><div class="reader-lookup-pager"><button class="reader-lookup-arrow" type="button" data-reader-lookup-step="-1" aria-label="Previous meaning" ${canGoBack ? "" : "disabled"}>‹</button><div><strong>${escapeHtml(term)}</strong><span>${activeIndex + 1} / ${terms.length}</span></div><button class="reader-lookup-arrow" type="button" data-reader-lookup-step="1" aria-label="Next meaning" ${canGoForward ? "" : "disabled"}>›</button></div><button class="copy-button" type="button" data-close-reader-lookup>Close</button></div>
     ${exact.length ? `<div><p class="reader-lookup-label">${isPhrase ? "Phrase meanings" : "Meanings"}</p>${exact.map((item) => readerMeaningHtml(item.meanings)).join("")}</div>` : `<p class="reader-lookup-empty">No direct glossary meaning for this ${isPhrase ? "phrase" : "word"} yet.</p>`}
-    ${phrases.length ? `<div class="reader-related-phrases"><p class="reader-lookup-label">Phrases containing ${escapeHtml(lookup.term)}</p>${phrases.map((item) => `<div class="reader-related-phrase"><strong>${escapeHtml(item.si)}</strong>${readerMeaningHtml(item.meanings)}</div>`).join("")}</div>` : ""}
     ${lookup.editing ? `<label class="reader-meaning-editor">${exact.length ? "Edit meanings" : "Add meanings"} <small>Separate alternatives with |</small><input id="readerMeaningInput" value="${escapeHtml(exact[0]?.meanings.join(" | ") ?? "")}" placeholder="English meaning"></label><div class="reader-edit-actions"><button class="small-action" type="button" data-save-reader-meaning>${exact.length ? "Save meaning" : "Add meaning"}</button><button class="small-action" type="button" data-cancel-reader-meaning>Cancel</button></div>` : `<button class="reader-line-translation-toggle" type="button" data-edit-reader-meaning>${exact.length ? `Edit ${isPhrase ? "phrase" : "word"} meaning` : `Add ${isPhrase ? "phrase" : "word"} meaning`}</button>`}
     <button class="reader-line-translation-toggle" type="button" data-toggle-reader-line-translation>${fullTranslationVisible ? "Hide full line translation" : "Show full line translation"}</button>
     ${fullTranslationVisible ? `<p class="reader-line-translation">${escapeHtml(line.en)}</p>` : ""}
@@ -1477,10 +1491,20 @@ function bindReaderEvents(document) {
       const sameSelection =
         state.readerLookup?.documentId === document.id &&
         state.readerLookup?.lineId === button.dataset.readerLineId &&
-        state.readerLookup?.term === button.dataset.readerWord;
+        state.readerLookup?.word === button.dataset.readerWord;
       state.readerLookup = sameSelection
         ? null
-        : { documentId: document.id, lineId: button.dataset.readerLineId, term: button.dataset.readerWord, fullTranslationVisible: false };
+        : { documentId: document.id, lineId: button.dataset.readerLineId, word: button.dataset.readerWord, termIndex: 0, fullTranslationVisible: false };
+      renderReader();
+    });
+  });
+  els.readerContent.querySelectorAll("[data-reader-lookup-step]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const line = document.passages.find((item) => item.id === state.readerLookup?.lineId);
+      if (!state.readerLookup || !line) return;
+      const terms = readerLookupTerms(document, line, state.readerLookup.word);
+      const nextIndex = Math.min(Math.max((state.readerLookup.termIndex ?? 0) + Number(button.dataset.readerLookupStep), 0), terms.length - 1);
+      state.readerLookup = { ...state.readerLookup, termIndex: nextIndex, editing: false };
       renderReader();
     });
   });
@@ -1502,7 +1526,9 @@ function bindReaderEvents(document) {
   });
   els.readerContent.querySelector("[data-save-reader-meaning]")?.addEventListener("click", async () => {
     const input = els.readerContent.querySelector("#readerMeaningInput");
-    await saveReaderMeaning(document, state.readerLookup?.term, input?.value ?? "");
+    const line = document.passages.find((item) => item.id === state.readerLookup?.lineId);
+    const terms = line && state.readerLookup ? readerLookupTerms(document, line, state.readerLookup.word) : [];
+    await saveReaderMeaning(document, terms[state.readerLookup?.termIndex ?? 0], input?.value ?? "");
   });
 }
 
