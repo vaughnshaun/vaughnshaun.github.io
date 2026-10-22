@@ -164,11 +164,19 @@ h3 {
 }
 
 .offline-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   margin: -4px 0 14px;
+}
+
+.offline-row .offline-status {
+  min-width: 0;
+}
+
+.offline-row .theme-toggle {
+  justify-self: end;
 }
 
 .offline-status.is-ready {

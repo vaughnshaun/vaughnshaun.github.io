@@ -153,8 +153,13 @@ function bindEvents() {
   els.continueButton.addEventListener("click", () => startLesson((nextRecommendedLesson() ?? state.data.courseLessons[0]).id));
   els.themeToggle.addEventListener("click", () => {
     state.settings.appTheme = state.settings.appTheme === "dark" ? "light" : "dark";
-    saveSettings();
-    render();
+    applyAppTheme();
+    renderHeader();
+    try {
+      saveSettings();
+    } catch (error) {
+      console.warn("Could not save the theme preference.", error);
+    }
   });
   els.lessonSelect.addEventListener("change", (event) => {
     if (event.target.value.startsWith("story:")) startStoryLesson(event.target.value.slice(6));
