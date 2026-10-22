@@ -13,7 +13,8 @@
   --shadow: 0 16px 40px rgba(24, 33, 31, 0.12);
 }
 
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+body.dark-theme {
   color-scheme: dark;
   --bg: #15211f;
   --ink: #eff7f4;
@@ -72,12 +73,6 @@ button:disabled {
   justify-content: space-between;
   gap: 14px;
   margin-bottom: 16px;
-}
-
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 .theme-toggle {
@@ -157,7 +152,7 @@ h3 {
 .offline-status {
   width: fit-content;
   max-width: 100%;
-  margin: -4px 0 14px;
+  margin: 0;
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -166,6 +161,14 @@ h3 {
   font-size: 0.78rem;
   font-weight: 800;
   line-height: 1.25;
+}
+
+.offline-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -4px 0 14px;
 }
 
 .offline-status.is-ready {

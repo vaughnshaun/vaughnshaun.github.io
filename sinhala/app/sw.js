@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "sinhala-path-";
-const CACHE_NAME = `${CACHE_PREFIX}v62`;
+const CACHE_NAME = `${CACHE_PREFIX}v63`;
 const PRECACHE_MANIFEST = "./precache-assets.json";
 
 self.addEventListener("install", (event) => {

@@ -257,7 +257,10 @@ function renderHeader() {
 }
 
 function applyAppTheme() {
-  document.documentElement.dataset.theme = state.settings.appTheme;
+  const isDark = state.settings.appTheme === "dark";
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  document.body.classList.toggle("dark-theme", isDark);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isDark ? "#15211f" : "#0f766e");
 }
 
 function renderPath() {
