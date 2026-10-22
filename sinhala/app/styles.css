@@ -1161,6 +1161,11 @@ h3 {
   background: rgba(21, 33, 31, 0.88);
 }
 
+:root[data-theme="dark"] .tab.active {
+  background: var(--teal);
+  color: #fff;
+}
+
 :root[data-theme="dark"] .small-action,
 :root[data-theme="dark"] .reader-mode-switch button.active,
 :root[data-theme="dark"] .reader-meanings span {
