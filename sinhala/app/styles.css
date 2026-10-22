@@ -1027,6 +1027,17 @@ h3 {
   color: var(--ink);
 }
 
+/* Keep a deliberately light Reader readable when the surrounding app is dark. */
+.reader-overlay:not(.is-dark) {
+  --bg: #f8f5ef;
+  --ink: #18211f;
+  --muted: #64706d;
+  --line: #ded8cc;
+  --teal-dark: #0b514d;
+  --surface: #fffdfa;
+  color: #18211f;
+}
+
 .reader-overlay-shell {
   width: min(100%, 880px);
   min-height: 100%;
@@ -1081,6 +1092,13 @@ h3 {
   border-radius: 8px;
   background: rgba(255, 253, 250, 0.94);
   box-shadow: var(--shadow);
+}
+
+.reader-overlay:not(.is-dark) .personal-reader-document,
+.reader-overlay:not(.is-dark) .reader-si,
+.reader-overlay:not(.is-dark) .reader-speaker,
+.reader-overlay:not(.is-dark) .reader-word-token {
+  color: #18211f;
 }
 
 .reader-overlay.is-dark {
