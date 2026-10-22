@@ -1028,7 +1028,7 @@ h3 {
 
 .reader-overlay-header {
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   margin-bottom: 18px;
@@ -1046,7 +1046,13 @@ h3 {
   font-weight: 800;
 }
 
+.reader-overlay-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .reader-overlay-back,
+.reader-export-transcript,
 .reader-theme-toggle {
   display: grid;
   width: 44px;

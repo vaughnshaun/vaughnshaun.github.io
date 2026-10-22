@@ -1637,6 +1637,35 @@ function exportReaderBackup() {
   renderReaderImportMessage();
 }
 
+function exportReaderTranscript(document) {
+  const speakerIds = new Map();
+  const speakers = {};
+  const speakerIdFor = (speaker) => {
+    if (speakerIds.has(speaker)) return speakerIds.get(speaker);
+    const id = `speaker_${speakerIds.size + 1}`;
+    speakerIds.set(speaker, id);
+    speakers[id] = speaker;
+    return id;
+  };
+  const payload = {
+    speakers,
+    segments: document.passages.map((line) => ({
+      speaker_id: speakerIdFor(line.speaker),
+      sinhala: line.si,
+      english: line.en,
+      vocabulary: (line.vocabulary ?? []).map((item) => ({ word: item.si, meanings: item.meanings }))
+    }))
+  };
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const fileStem = document.title.toLocaleLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "transcript";
+  link.href = url;
+  link.download = `${fileStem}-transcript.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function renderReader() {
   const document = selectedReaderDocument();
   renderReaderImportMessage();
@@ -1704,7 +1733,7 @@ function readerDocumentHtml(document) {
     })
     .join("");
   const isDark = state.settings.appTheme === "dark";
-  return `<div class="reader-overlay-shell"><header class="reader-overlay-header"><button class="reader-overlay-back" type="button" data-close-reader-overlay aria-label="Close reader">‹</button><div><h2>${escapeHtml(document.title)}</h2><span>${document.passages.length} lines · ${document.vocabulary.length} glossary entries</span></div><button class="reader-theme-toggle" type="button" data-toggle-reader-theme aria-label="Switch to ${isDark ? "light" : "dark"} mode">${isDark ? "☀" : "☾"}</button></header><article class="personal-reader-document"><div class="personal-reader-lines">${lines}</div></article></div>`;
+  return `<div class="reader-overlay-shell"><header class="reader-overlay-header"><button class="reader-overlay-back" type="button" data-close-reader-overlay aria-label="Close reader">‹</button><div><h2>${escapeHtml(document.title)}</h2><span>${document.passages.length} lines · ${document.vocabulary.length} glossary entries</span></div><div class="reader-overlay-actions"><button class="reader-export-transcript" type="button" data-export-reader-transcript aria-label="Export this transcript">⇩</button><button class="reader-theme-toggle" type="button" data-toggle-reader-theme aria-label="Switch to ${isDark ? "light" : "dark"} mode">${isDark ? "☀" : "☾"}</button></div></header><article class="personal-reader-document"><div class="personal-reader-lines">${lines}</div></article></div>`;
 }
 
 function renderReaderTokens(line, document) {
@@ -1780,6 +1809,7 @@ function bindReaderEvents(document) {
     saveSettings();
     renderReader();
   });
+  els.readerContent.querySelector("[data-export-reader-transcript]")?.addEventListener("click", () => exportReaderTranscript(document));
   els.readerContent.querySelectorAll("[data-reader-word]").forEach((button) => {
     button.addEventListener("click", () => {
       const sameSelection =
