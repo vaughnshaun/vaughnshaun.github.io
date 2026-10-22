@@ -1680,7 +1680,7 @@ function downloadJsonFile(fileName, payload) {
   window.setTimeout(() => {
     link.remove();
     URL.revokeObjectURL(url);
-  }, 1_000);
+  }, 60_000);
 }
 
 function renderReader() {
@@ -1704,7 +1704,7 @@ function renderReader() {
         .map(
           (item) => `<article class="reader-library-item">
             <div class="reader-library-details"><strong>${escapeHtml(item.title)}</strong><span>${item.passages.length} lines · ${item.vocabulary.length} glossary entries</span></div>
-            <div class="reader-library-actions"><button class="reader-library-open" type="button" data-open-reader="${escapeHtml(item.id)}">Open</button><button class="reader-delete-button" type="button" data-remove-reader="${escapeHtml(item.id)}">Remove</button></div>
+            <div class="reader-library-actions"><button class="reader-library-open" type="button" data-open-reader="${escapeHtml(item.id)}">Open</button><button class="reader-delete-button" type="button" data-remove-reader="${escapeHtml(item.id)}">Delete</button></div>
           </article>`
         )
         .join("")
@@ -1826,7 +1826,12 @@ function bindReaderEvents(document) {
     saveSettings();
     renderReader();
   });
-  els.readerContent.querySelector("[data-export-reader-transcript]")?.addEventListener("click", () => exportReaderTranscript(document));
+  els.readerContent.querySelector("[data-export-reader-transcript]")?.addEventListener("click", (event) => {
+    exportReaderTranscript(document);
+    const button = event.currentTarget;
+    button.setAttribute("aria-label", "Transcript download requested");
+    window.setTimeout(() => button.setAttribute("aria-label", "Export this transcript"), 2_000);
+  });
   els.readerContent.querySelectorAll("[data-reader-word]").forEach((button) => {
     button.addEventListener("click", () => {
       const sameSelection =
