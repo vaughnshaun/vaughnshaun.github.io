@@ -594,24 +594,28 @@ h3 {
   background: #f8fcfb;
 }
 
-.reader-library-open {
+.reader-library-details {
   display: grid;
   flex: 1;
   min-width: 0;
-  min-height: 44px;
   gap: 3px;
-  border: 0;
-  background: transparent;
   color: var(--ink);
-  padding: 0;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
 }
 
-.reader-library-open:focus-visible {
-  outline: 2px solid rgba(15, 118, 110, 0.42);
-  outline-offset: 3px;
+.reader-library-open,
+.reader-delete-button {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.reader-library-open {
+  border: 0;
+  background: var(--teal);
+  color: #fff;
 }
 
 .reader-library-item span {
@@ -620,16 +624,9 @@ h3 {
 }
 
 .reader-delete-button {
-  display: grid;
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  place-items: center;
   border: 1px solid rgba(239, 115, 93, 0.42);
-  border-radius: 8px;
   background: rgba(239, 115, 93, 0.08);
   color: #8d2d1d;
-  font-size: 1rem;
 }
 
 .reader-library-actions,
@@ -1181,13 +1178,17 @@ h3 {
 :root[data-theme="dark"] select,
 :root[data-theme="dark"] textarea,
 :root[data-theme="dark"] .choice,
-:root[data-theme="dark"] .reader-library-open,
 :root[data-theme="dark"] .reader-lookup-arrow,
 :root[data-theme="dark"] .copy-button,
 :root[data-theme="dark"] .reader-line-translation {
   border-color: var(--line);
   background: var(--surface);
   color: var(--ink);
+}
+
+:root[data-theme="dark"] .reader-library-open {
+  background: var(--teal);
+  color: #fff;
 }
 
 :root[data-theme="dark"] .progress-track,
@@ -2478,6 +2479,11 @@ h3 {
   .reader-library-item {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .reader-library-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
   }
 
   .lesson-node {
