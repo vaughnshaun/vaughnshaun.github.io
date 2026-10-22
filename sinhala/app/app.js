@@ -4,10 +4,12 @@ import { parseReaderImport, readerImportId, readerTokens } from "./reader-import
 const IMPORTED_STORIES_STORAGE_KEY = "sinhala-imported-stories";
 const IMPORTED_STORY_NOTICE_KEY = "sinhala-story-import-notice";
 const READER_DATABASE_NAME = "sinhala-reader-imports";
-const READER_DATABASE_VERSION = 1;
+const READER_DATABASE_VERSION = 2;
 const READER_STORE_NAME = "documents";
+const READER_GLOSSARY_STORE_NAME = "glossary";
 const READER_FALLBACK_STORAGE_KEY = "sinhala-reader-imports-fallback";
-const READER_BACKUP_VERSION = 1;
+const READER_FALLBACK_GLOSSARY_STORAGE_KEY = "sinhala-reader-global-glossary-fallback";
+const READER_BACKUP_VERSION = 2;
 const initialStoryImportNotice = loadStoryImportNotice();
 
 const state = {
@@ -42,6 +44,7 @@ const state = {
   storyImportMessage: initialStoryImportNotice.message,
   storyImportError: initialStoryImportNotice.isError,
   readerDocuments: [],
+  readerGlossary: [],
   currentReaderDocumentId: null,
   pendingReaderFile: null,
   readerImportMessage: "",
@@ -107,6 +110,12 @@ async function init() {
     state.data = await response.json();
     restoreImportedStories();
     state.readerDocuments = await loadReaderDocuments();
+    state.readerGlossary = await loadReaderGlossary();
+    if (!state.readerGlossary.length && state.readerDocuments.length) {
+      state.readerGlossary = readerGlossaryFromDocuments(state.readerDocuments);
+      await saveReaderGlossary(state.readerGlossary);
+    }
+    state.readerDocuments = state.readerDocuments.map((document) => syncReaderDocumentGlossary(document, state.readerGlossary));
     initializeTranslations();
     state.currentLessonId = nextRecommendedLesson()?.id ?? state.data.courseLessons[0]?.id;
     restoreCourseCheckpoint(state.currentLessonId);
@@ -1293,6 +1302,7 @@ function openReaderDatabase() {
     const request = indexedDB.open(READER_DATABASE_NAME, READER_DATABASE_VERSION);
     request.onupgradeneeded = () => {
       if (!request.result.objectStoreNames.contains(READER_STORE_NAME)) request.result.createObjectStore(READER_STORE_NAME, { keyPath: "id" });
+      if (!request.result.objectStoreNames.contains(READER_GLOSSARY_STORE_NAME)) request.result.createObjectStore(READER_GLOSSARY_STORE_NAME, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("Reader storage could not be opened."));
@@ -1316,6 +1326,19 @@ function saveReaderFallbackRecords(records) {
   localStorage.setItem(READER_FALLBACK_STORAGE_KEY, JSON.stringify(records));
 }
 
+function loadReaderFallbackGlossary() {
+  try {
+    const glossary = JSON.parse(localStorage.getItem(READER_FALLBACK_GLOSSARY_STORAGE_KEY));
+    return Array.isArray(glossary) ? glossary : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveReaderFallbackGlossary(glossary) {
+  localStorage.setItem(READER_FALLBACK_GLOSSARY_STORAGE_KEY, JSON.stringify(glossary));
+}
+
 async function saveReaderRecord(record) {
   if (readerDatabaseAvailable()) return readerStoreRequest("readwrite", (store) => store.put(record));
   const records = loadReaderFallbackRecords();
@@ -1337,17 +1360,49 @@ async function saveReaderRecords(records) {
   saveReaderFallbackRecords([...byId.values()]);
 }
 
+async function loadReaderGlossary() {
+  try {
+    const records = readerDatabaseAvailable()
+      ? await readerStoreRequest("readonly", (store) => store.getAll(), READER_GLOSSARY_STORE_NAME)
+      : loadReaderFallbackGlossary();
+    return normalizeReaderGlossary(records);
+  } catch (error) {
+    console.warn("Could not restore the Reader glossary.", error);
+    state.readerImportMessage = "Saved Reader meanings could not be opened on this device.";
+    state.readerImportError = true;
+    return [];
+  }
+}
+
+async function saveReaderGlossary(glossary) {
+  const records = normalizeReaderGlossary(glossary);
+  if (!records.length) {
+    if (!readerDatabaseAvailable()) saveReaderFallbackGlossary([]);
+    return;
+  }
+  if (readerDatabaseAvailable()) {
+    return readerStoreRequest("readwrite", (store) => {
+      let request = null;
+      records.forEach((record) => {
+        request = store.put(record);
+      });
+      return request;
+    }, READER_GLOSSARY_STORE_NAME);
+  }
+  saveReaderFallbackGlossary(records);
+}
+
 async function deleteReaderRecord(id) {
   if (readerDatabaseAvailable()) return readerStoreRequest("readwrite", (store) => store.delete(id));
   saveReaderFallbackRecords(loadReaderFallbackRecords().filter((item) => item?.id !== id));
 }
 
-function readerStoreRequest(mode, action) {
+function readerStoreRequest(mode, action, storeName = READER_STORE_NAME) {
   return openReaderDatabase().then(
     (database) =>
       new Promise((resolve, reject) => {
-        const transaction = database.transaction(READER_STORE_NAME, mode);
-        const request = action(transaction.objectStore(READER_STORE_NAME));
+        const transaction = database.transaction(storeName, mode);
+        const request = action(transaction.objectStore(storeName));
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error ?? new Error("Reader storage could not be updated."));
         transaction.oncomplete = () => database.close();
@@ -1379,10 +1434,69 @@ function readerNameFromFileName(fileName) {
   return String(fileName ?? "").replace(/\.(json|md)$/i, "").replace(/[-_]+/g, " ").trim();
 }
 
+function readerTermKey(value) {
+  return readerTokens(value).join(" ").toLocaleLowerCase();
+}
+
+function normalizeReaderMeanings(meanings) {
+  const seen = new Set();
+  return (meanings ?? []).reduce((normalized, meaning) => {
+    const value = String(meaning ?? "").trim();
+    const key = value.toLocaleLowerCase();
+    if (!value || seen.has(key)) return normalized;
+    seen.add(key);
+    normalized.push(value);
+    return normalized;
+  }, []);
+}
+
+function normalizeReaderGlossary(items) {
+  const byTerm = new Map();
+  (items ?? []).forEach((item) => {
+    const si = String(item?.si ?? "").trim();
+    const id = readerTermKey(si);
+    const meanings = normalizeReaderMeanings(item?.meanings);
+    if (!id || !meanings.length) return;
+    const current = byTerm.get(id);
+    byTerm.set(id, { id, si: current?.si ?? si, meanings: normalizeReaderMeanings([...(current?.meanings ?? []), ...meanings]) });
+  });
+  return [...byTerm.values()];
+}
+
+function readerGlossaryFromDocuments(documents) {
+  return normalizeReaderGlossary(
+    (documents ?? []).flatMap((document) => [
+      ...(document.vocabulary ?? []),
+      ...(document.passages ?? []).flatMap((line) => line.vocabulary ?? [])
+    ])
+  );
+}
+
+function mergeReaderGlossary(...collections) {
+  return normalizeReaderGlossary(collections.flat());
+}
+
+function readerGlossaryEntry(term, glossary = state.readerGlossary) {
+  const id = readerTermKey(term);
+  return (glossary ?? []).find((item) => item.id === id) ?? null;
+}
+
+function syncReaderDocumentGlossary(document, glossary = state.readerGlossary) {
+  const apply = (item) => {
+    const entry = readerGlossaryEntry(item.si, glossary);
+    return entry ? { ...item, si: entry.si, meanings: [...entry.meanings] } : item;
+  };
+  return {
+    ...document,
+    vocabulary: (document.vocabulary ?? []).map(apply),
+    passages: (document.passages ?? []).map((line) => ({ ...line, vocabulary: (line.vocabulary ?? []).map(apply) }))
+  };
+}
+
 function readerBackupVocabularyItem(item) {
   if (!item || typeof item !== "object") return null;
   const si = String(item.si ?? "").trim();
-  const meanings = Array.isArray(item.meanings) ? item.meanings.map((meaning) => String(meaning ?? "").trim()).filter(Boolean) : [];
+  const meanings = normalizeReaderMeanings(item.meanings);
   return si && meanings.length ? { si, meanings } : null;
 }
 
@@ -1417,9 +1531,10 @@ function parseReaderBackup(text) {
   } catch {
     throw new Error("This Reader backup could not be read.");
   }
-  if (!payload || payload.version !== READER_BACKUP_VERSION || payload.kind !== "sinhala-reader-backup" || !Array.isArray(payload.documents)) {
+  if (!payload || ![1, READER_BACKUP_VERSION].includes(payload.version) || payload.kind !== "sinhala-reader-backup" || !Array.isArray(payload.documents)) {
     throw new Error("Choose a Reader backup JSON file exported by this app.");
   }
+  if (payload.version === READER_BACKUP_VERSION && !Array.isArray(payload.glossary)) throw new Error("This Reader backup is missing its shared glossary.");
   if (!payload.documents.length) throw new Error("This Reader backup does not contain any transcripts.");
   const documents = payload.documents.map(readerBackupDocument);
   const ids = new Set();
@@ -1427,7 +1542,31 @@ function parseReaderBackup(text) {
     if (ids.has(document.id)) throw new Error("This Reader backup contains duplicate saved names.");
     ids.add(document.id);
   });
-  return documents;
+  const glossary = payload.version === 1 ? readerGlossaryFromDocuments(documents) : normalizeReaderGlossary(payload.glossary);
+  return { documents, glossary: mergeReaderGlossary(readerGlossaryFromDocuments(documents), glossary) };
+}
+
+function replaceReaderGlossaryEntry(glossary, term, meanings) {
+  const id = readerTermKey(term);
+  const existing = readerGlossaryEntry(term, glossary);
+  return normalizeReaderGlossary([
+    ...(glossary ?? []).filter((item) => item.id !== id),
+    { si: existing?.si ?? String(term ?? "").trim(), meanings }
+  ]);
+}
+
+function addReaderDocumentVocabulary(document, term, meanings, lineId) {
+  const key = readerTermKey(term);
+  const contains = (items) => (items ?? []).some((item) => readerTermKey(item.si) === key);
+  if (contains(document.vocabulary)) return document;
+  const item = { si: term, meanings };
+  return {
+    ...document,
+    vocabulary: [...(document.vocabulary ?? []), item],
+    passages: (document.passages ?? []).map((line) =>
+      line.id === lineId && !contains(line.vocabulary) ? { ...line, vocabulary: [...(line.vocabulary ?? []), { ...item }] } : line
+    )
+  };
 }
 
 function renderReaderImportMessage() {
@@ -1444,7 +1583,7 @@ function exportReaderBackup() {
     return;
   }
   const exportedAt = new Date().toISOString();
-  const payload = { version: READER_BACKUP_VERSION, kind: "sinhala-reader-backup", exportedAt, documents: state.readerDocuments };
+  const payload = { version: READER_BACKUP_VERSION, kind: "sinhala-reader-backup", exportedAt, documents: state.readerDocuments, glossary: state.readerGlossary };
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -1517,15 +1656,13 @@ function renderReaderTokens(line, document) {
 function readerLookupTerms(document, line, word) {
   const normalized = readerTokens(word)[0] ?? "";
   const lineTokens = readerTokens(line.si);
-  const phrases = dedupeReaderVocabulary(
-    (document.vocabulary ?? [])
+  const phrases = (state.readerGlossary ?? [])
       .filter((item) => {
       const tokens = readerTokens(item.si);
         if (tokens.length < 2 || !tokens.includes(normalized) || tokens.length > lineTokens.length) return false;
         return lineTokens.some((_, start) => tokens.every((token, index) => token === lineTokens[start + index]));
       })
-      .sort((left, right) => readerTokens(left.si).length - readerTokens(right.si).length || left.si.localeCompare(right.si))
-  );
+      .sort((left, right) => readerTokens(left.si).length - readerTokens(right.si).length || left.si.localeCompare(right.si));
   const seen = new Set();
   return [word, ...phrases.map((item) => item.si)].filter((term) => {
     const key = readerTokens(term).join(" ");
@@ -1535,21 +1672,9 @@ function readerLookupTerms(document, line, word) {
   });
 }
 
-function readerMatchesForTerm(document, term) {
-  const normalized = readerTokens(term).join(" ");
-  const entries = document.vocabulary ?? [];
-  const exact = entries.filter((item) => readerTokens(item.si).join(" ") === normalized);
-  return dedupeReaderVocabulary(exact);
-}
-
-function dedupeReaderVocabulary(items) {
-  const seen = new Set();
-  return items.filter((item) => {
-    const key = `${item.si}:${(item.meanings ?? []).join("|")}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+function readerMatchesForTerm(term) {
+  const entry = readerGlossaryEntry(term);
+  return entry ? [entry] : [];
 }
 
 function readerMeaningHtml(meanings) {
@@ -1562,7 +1687,7 @@ function readerLookupHtml(line, document) {
   const terms = readerLookupTerms(document, line, lookup.word);
   const activeIndex = Math.min(Math.max(lookup.termIndex ?? 0, 0), terms.length - 1);
   const term = terms[activeIndex];
-  const exact = readerMatchesForTerm(document, term);
+  const exact = readerMatchesForTerm(term);
   const fullTranslationVisible = Boolean(lookup.fullTranslationVisible);
   const isPhrase = readerTokens(term).length > 1;
   const canGoBack = activeIndex > 0;
@@ -1625,36 +1750,28 @@ function bindReaderEvents(document) {
 }
 
 async function saveReaderMeaning(document, term, value) {
-  const meanings = value
-    .split("|")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const meanings = normalizeReaderMeanings(value.split("|").map((item) => item.trim()));
   if (!meanings.length) {
     state.readerImportMessage = "Add at least one English meaning before saving.";
     state.readerImportError = true;
     renderReaderImportMessage();
     return;
   }
-  const normalized = readerTokens(term).join(" ");
-  let found = false;
-  const update = (item) => {
-    if (readerTokens(item.si).join(" ") === normalized) {
-      item.meanings = [...new Set(meanings)];
-      found = true;
-    }
-  };
-  document.vocabulary.forEach(update);
-  document.passages.forEach((line) => line.vocabulary.forEach(update));
-  if (!found) {
-    const item = { si: term, meanings: [...new Set(meanings)] };
-    document.vocabulary.push(item);
-    document.passages.find((line) => line.id === state.readerLookup?.lineId)?.vocabulary.push({ ...item });
-  }
   try {
-    await saveReaderRecord({ id: document.id, importedAt: new Date().toISOString(), document });
-    state.readerDocuments = state.readerDocuments.map((item) => (item.id === document.id ? document : item));
+    const glossary = replaceReaderGlossaryEntry(state.readerGlossary, term, meanings);
+    let documents = state.readerDocuments.map((item) => syncReaderDocumentGlossary(item, glossary));
+    let activeDocument = documents.find((item) => item.id === document.id);
+    if (!activeDocument) throw new Error("This Reader transcript could not be found.");
+    const sharedEntry = readerGlossaryEntry(term, glossary);
+    activeDocument = addReaderDocumentVocabulary(activeDocument, sharedEntry.si, sharedEntry.meanings, state.readerLookup?.lineId);
+    documents = documents.map((item) => (item.id === activeDocument.id ? activeDocument : item));
+    await saveReaderGlossary(glossary);
+    const savedAt = new Date().toISOString();
+    await saveReaderRecords(documents.map((item) => ({ id: item.id, importedAt: savedAt, document: item })));
+    state.readerGlossary = glossary;
+    state.readerDocuments = documents;
     state.readerLookup = { ...state.readerLookup, editing: false };
-    state.readerImportMessage = `Saved the meaning for ${term} in ${document.title}.`;
+    state.readerImportMessage = `Saved the shared meaning for ${term}.`;
     state.readerImportError = false;
     renderReader();
   } catch (error) {
@@ -1684,9 +1801,13 @@ async function importReaderFile() {
   try {
     if (!/\.(json|md)$/i.test(file.name)) throw new Error("Choose a transcript.json or translated transcript Markdown (.md) file.");
     if (file.size > 10_000_000) throw new Error("Reader files must be 10 MB or smaller.");
-    const document = parseReaderImport(await file.text(), { fileName: file.name, name: els.readerImportName.value });
+    const parsedDocument = parseReaderImport(await file.text(), { fileName: file.name, name: els.readerImportName.value });
+    const glossary = mergeReaderGlossary(state.readerGlossary, readerGlossaryFromDocuments([parsedDocument]));
+    const document = syncReaderDocumentGlossary(parsedDocument, glossary);
     const record = { id: document.id, importedAt: new Date().toISOString(), document };
+    await saveReaderGlossary(glossary);
     await saveReaderRecord(record);
+    state.readerGlossary = glossary;
     state.readerDocuments = [document, ...state.readerDocuments.filter((item) => item.id !== document.id)];
     state.currentReaderDocumentId = null;
     state.pendingReaderFile = null;
@@ -1707,13 +1828,17 @@ async function importReaderBackup(event) {
   if (!file) return;
   try {
     if (!/\.json$/i.test(file.name)) throw new Error("Choose a Reader backup JSON file.");
-    const documents = parseReaderBackup(await file.text());
+    const backup = parseReaderBackup(await file.text());
+    const glossary = mergeReaderGlossary(state.readerGlossary, backup.glossary, readerGlossaryFromDocuments(backup.documents));
+    const documents = backup.documents.map((document) => syncReaderDocumentGlossary(document, glossary));
     const existingIds = new Set(state.readerDocuments.map((document) => document.id));
     const replaced = documents.filter((document) => existingIds.has(document.id)).length;
     const importedAt = new Date().toISOString();
+    await saveReaderGlossary(glossary);
     await saveReaderRecords(documents.map((document) => ({ id: document.id, importedAt, document })));
     const restoredIds = new Set(documents.map((document) => document.id));
-    state.readerDocuments = [...documents, ...state.readerDocuments.filter((document) => !restoredIds.has(document.id))];
+    state.readerGlossary = glossary;
+    state.readerDocuments = [...documents, ...state.readerDocuments.filter((document) => !restoredIds.has(document.id)).map((document) => syncReaderDocumentGlossary(document, glossary))];
     state.currentReaderDocumentId = null;
     state.readerLookup = null;
     state.readerImportMessage = `Restored ${documents.length} transcript${documents.length === 1 ? "" : "s"}: ${replaced} replaced, ${documents.length - replaced} added.`;
