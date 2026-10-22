@@ -1712,7 +1712,7 @@ function renderReader() {
       ? `<div class="note-band"><p>No saved transcripts match that search.</p></div>`
       : `<div class="note-band"><p>No personal transcripts imported yet.</p></div>`;
   els.readerOverlay.hidden = !document;
-  els.readerOverlay.classList.toggle("is-dark", state.settings.appTheme === "dark");
+  els.readerOverlay.classList.toggle("is-dark", state.settings.readerTheme === "dark");
   els.readerContent.innerHTML = document ? readerDocumentHtml(document) : "";
   els.readerLibrary.querySelectorAll("[data-open-reader]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1749,7 +1749,7 @@ function readerDocumentHtml(document) {
       </article>`;
     })
     .join("");
-  const isDark = state.settings.appTheme === "dark";
+  const isDark = state.settings.readerTheme === "dark";
   return `<div class="reader-overlay-shell"><header class="reader-overlay-header"><button class="reader-overlay-back" type="button" data-close-reader-overlay aria-label="Close reader">‹</button><div><h2>${escapeHtml(document.title)}</h2><span>${document.passages.length} lines · ${document.vocabulary.length} glossary entries</span></div><div class="reader-overlay-actions"><button class="reader-export-transcript" type="button" data-export-reader-transcript aria-label="Export this transcript">⇩</button><button class="reader-theme-toggle" type="button" data-toggle-reader-theme aria-label="Switch to ${isDark ? "light" : "dark"} mode">${isDark ? "☀" : "☾"}</button></div></header><article class="personal-reader-document"><div class="personal-reader-lines">${lines}</div></article></div>`;
 }
 
@@ -1822,7 +1822,7 @@ function bindReaderEvents(document) {
     renderReader();
   });
   els.readerContent.querySelector("[data-toggle-reader-theme]")?.addEventListener("click", () => {
-    state.settings.appTheme = state.settings.appTheme === "dark" ? "light" : "dark";
+    state.settings.readerTheme = state.settings.readerTheme === "dark" ? "light" : "dark";
     saveSettings();
     renderReader();
   });
@@ -4202,18 +4202,21 @@ function loadSettings() {
 function normalizeSettings(settings) {
   const rate = Number(settings?.transliterationRate);
   const appTheme = settings?.appTheme === "dark" || (settings?.appTheme == null && settings?.readerTheme === "dark") ? "dark" : "light";
+  const readerTheme = settings?.readerTheme === "dark" ? "dark" : settings?.readerTheme === "light" ? "light" : appTheme;
   return {
     ...defaultSettings(),
     ...(settings ?? {}),
     transliterationRate: Number.isFinite(rate) ? Math.max(0, Math.min(1, rate)) : defaultSettings().transliterationRate,
-    appTheme
+    appTheme,
+    readerTheme
   };
 }
 
 function defaultSettings() {
   return {
     transliterationRate: 0.2,
-    appTheme: "light"
+    appTheme: "light",
+    readerTheme: "light"
   };
 }
 
