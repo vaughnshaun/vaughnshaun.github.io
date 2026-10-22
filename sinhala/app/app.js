@@ -1664,14 +1664,23 @@ function exportReaderTranscript(document) {
       vocabulary: (line.vocabulary ?? []).map((item) => ({ word: item.si, meanings: item.meanings }))
     }))
   };
+  const fileStem = document.title.toLocaleLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "transcript";
+  downloadJsonFile(`${fileStem}-transcript.json`, payload);
+}
+
+function downloadJsonFile(fileName, payload) {
   const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  const fileStem = document.title.toLocaleLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "transcript";
   link.href = url;
-  link.download = `${fileStem}-transcript.json`;
+  link.download = fileName;
+  link.style.display = "none";
+  document.body.append(link);
   link.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => {
+    link.remove();
+    URL.revokeObjectURL(url);
+  }, 1_000);
 }
 
 function renderReader() {
