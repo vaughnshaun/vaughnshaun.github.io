@@ -49,7 +49,11 @@ const state = {
   pendingReaderFile: null,
   readerImportMessage: "",
   readerImportError: false,
-  readerLookup: null
+  readerLookup: null,
+  readerMode: "reader",
+  readerSearch: "",
+  readerSortDescending: false,
+  readerHelpOpen: false
 };
 
 const els = {
@@ -86,6 +90,15 @@ const els = {
   readerImportMessage: document.querySelector("#readerImportMessage"),
   readerLibrary: document.querySelector("#readerLibrary"),
   readerContent: document.querySelector("#readerContent"),
+  readerModeButton: document.querySelector("#readerModeButton"),
+  readerManageButton: document.querySelector("#readerManageButton"),
+  readerLibraryPanel: document.querySelector("#readerLibraryPanel"),
+  readerManagePanel: document.querySelector("#readerManagePanel"),
+  readerSearch: document.querySelector("#readerSearch"),
+  readerSort: document.querySelector("#readerSort"),
+  readerManageHelp: document.querySelector("#readerManageHelp"),
+  readerManageHelpDialog: document.querySelector("#readerManageHelpDialog"),
+  readerOverlay: document.querySelector("#readerOverlay"),
   grammarPanel: document.querySelector("#grammarPanel"),
   translationSearch: document.querySelector("#translationSearch"),
   translationLessonFilter: document.querySelector("#translationLessonFilter"),
@@ -169,6 +182,20 @@ function bindEvents() {
   els.readerImportButton.addEventListener("click", importReaderFile);
   els.exportReaderBackup.addEventListener("click", exportReaderBackup);
   els.importReaderBackup.addEventListener("change", importReaderBackup);
+  els.readerModeButton.addEventListener("click", () => setReaderMode("reader"));
+  els.readerManageButton.addEventListener("click", () => setReaderMode("manage"));
+  els.readerSearch.addEventListener("input", (event) => {
+    state.readerSearch = event.target.value;
+    renderReader();
+  });
+  els.readerSort.addEventListener("click", () => {
+    state.readerSortDescending = !state.readerSortDescending;
+    renderReader();
+  });
+  els.readerManageHelp.addEventListener("click", () => {
+    state.readerHelpOpen = true;
+    renderReader();
+  });
   els.translationSearch.addEventListener("input", () => {
     state.translationPage = 0;
     renderTranslationEditor();
@@ -1599,22 +1626,37 @@ function exportReaderBackup() {
 function renderReader() {
   const document = selectedReaderDocument();
   renderReaderImportMessage();
-  els.readerLibrary.innerHTML = state.readerDocuments.length
-    ? state.readerDocuments
+  const term = state.readerSearch.trim().toLocaleLowerCase();
+  const documents = state.readerDocuments
+    .filter((item) => !term || `${item.title} ${item.sourceName}`.toLocaleLowerCase().includes(term))
+    .sort((left, right) => (state.readerSortDescending ? -1 : 1) * left.title.localeCompare(right.title));
+  els.readerModeButton.classList.toggle("active", state.readerMode === "reader");
+  els.readerManageButton.classList.toggle("active", state.readerMode === "manage");
+  els.readerModeButton.setAttribute("aria-selected", String(state.readerMode === "reader"));
+  els.readerManageButton.setAttribute("aria-selected", String(state.readerMode === "manage"));
+  els.readerLibraryPanel.hidden = state.readerMode !== "reader";
+  els.readerManagePanel.hidden = state.readerMode !== "manage";
+  els.readerManageHelpDialog.hidden = !state.readerHelpOpen;
+  els.readerSearch.value = state.readerSearch;
+  els.readerSort.setAttribute("aria-label", state.readerSortDescending ? "Sort transcripts A to Z" : "Sort transcripts Z to A");
+  els.readerLibrary.innerHTML = documents.length
+    ? documents
         .map(
-          (item) => `<article class="reader-library-item ${item.id === document?.id ? "open" : ""}">
+          (item) => `<article class="reader-library-item">
             <div><strong>${escapeHtml(item.title)}</strong><span>${item.passages.length} lines · ${item.vocabulary.length} glossary entries</span></div>
-            <div class="reader-library-actions"><button class="small-action" type="button" data-open-reader="${escapeHtml(item.id)}">${item.id === document?.id ? "Close" : "Open"}</button><button class="small-action danger-action" type="button" data-remove-reader="${escapeHtml(item.id)}">Remove</button></div>
+            <div class="reader-library-actions"><button class="small-action" type="button" data-open-reader="${escapeHtml(item.id)}">Open</button><button class="small-action danger-action" type="button" data-remove-reader="${escapeHtml(item.id)}" aria-label="Remove ${escapeHtml(item.title)}">Remove</button></div>
           </article>`
         )
         .join("")
-    : `<div class="note-band"><p>No personal transcripts imported yet.</p></div>`;
-  els.readerContent.innerHTML = document
-    ? readerDocumentHtml(document)
-    : `<div class="note-band"><h3>Choose a transcript to read</h3><p>Import a translated transcript above, then press Open. The original file stays untouched; this device keeps a private reader copy.</p></div>`;
+    : state.readerDocuments.length
+      ? `<div class="note-band"><p>No saved transcripts match that search.</p></div>`
+      : `<div class="note-band"><p>No personal transcripts imported yet.</p></div>`;
+  els.readerOverlay.hidden = !document;
+  els.readerOverlay.classList.toggle("is-dark", state.settings.readerTheme === "dark");
+  els.readerContent.innerHTML = document ? readerDocumentHtml(document) : "";
   els.readerLibrary.querySelectorAll("[data-open-reader]").forEach((button) => {
     button.addEventListener("click", () => {
-      state.currentReaderDocumentId = state.currentReaderDocumentId === button.dataset.openReader ? null : button.dataset.openReader;
+      state.currentReaderDocumentId = button.dataset.openReader;
       state.readerLookup = null;
       renderReader();
     });
@@ -1622,7 +1664,17 @@ function renderReader() {
   els.readerLibrary.querySelectorAll("[data-remove-reader]").forEach((button) => {
     button.addEventListener("click", () => removeReaderDocument(button.dataset.removeReader));
   });
+  els.readerManageHelpDialog.querySelector("[data-close-reader-help]")?.addEventListener("click", () => {
+    state.readerHelpOpen = false;
+    renderReader();
+  });
   bindReaderEvents(document);
+}
+
+function setReaderMode(mode) {
+  state.readerMode = mode === "manage" ? "manage" : "reader";
+  state.readerHelpOpen = false;
+  renderReader();
 }
 
 function readerDocumentHtml(document) {
@@ -1637,7 +1689,8 @@ function readerDocumentHtml(document) {
       </article>`;
     })
     .join("");
-  return `<article class="personal-reader-document"><div class="personal-reader-heading"><div><p class="eyebrow">Personal transcript</p><h2>${escapeHtml(document.title)}</h2></div><span>${document.passages.length} lines · ${document.vocabulary.length} glossary entries</span></div><div class="personal-reader-lines">${lines}</div></article>`;
+  const isDark = state.settings.readerTheme === "dark";
+  return `<div class="reader-overlay-shell"><header class="reader-overlay-header"><button class="reader-overlay-back" type="button" data-close-reader-overlay aria-label="Close reader">‹</button><div><h2>${escapeHtml(document.title)}</h2><span>${document.passages.length} lines · ${document.vocabulary.length} glossary entries</span></div><button class="reader-theme-toggle" type="button" data-toggle-reader-theme aria-label="Switch to ${isDark ? "light" : "dark"} mode">${isDark ? "☀" : "☾"}</button></header><article class="personal-reader-document"><div class="personal-reader-lines">${lines}</div></article></div>`;
 }
 
 function renderReaderTokens(line, document) {
@@ -1703,6 +1756,16 @@ function readerLookupHtml(line, document) {
 
 function bindReaderEvents(document) {
   if (!document) return;
+  els.readerContent.querySelector("[data-close-reader-overlay]")?.addEventListener("click", () => {
+    state.currentReaderDocumentId = null;
+    state.readerLookup = null;
+    renderReader();
+  });
+  els.readerContent.querySelector("[data-toggle-reader-theme]")?.addEventListener("click", () => {
+    state.settings.readerTheme = state.settings.readerTheme === "dark" ? "light" : "dark";
+    saveSettings();
+    renderReader();
+  });
   els.readerContent.querySelectorAll("[data-reader-word]").forEach((button) => {
     button.addEventListener("click", () => {
       const sameSelection =
@@ -4075,13 +4138,15 @@ function normalizeSettings(settings) {
   return {
     ...defaultSettings(),
     ...(settings ?? {}),
-    transliterationRate: Number.isFinite(rate) ? Math.max(0, Math.min(1, rate)) : defaultSettings().transliterationRate
+    transliterationRate: Number.isFinite(rate) ? Math.max(0, Math.min(1, rate)) : defaultSettings().transliterationRate,
+    readerTheme: settings?.readerTheme === "dark" ? "dark" : "light"
   };
 }
 
 function defaultSettings() {
   return {
-    transliterationRate: 0.2
+    transliterationRate: 0.2,
+    readerTheme: "light"
   };
 }
 

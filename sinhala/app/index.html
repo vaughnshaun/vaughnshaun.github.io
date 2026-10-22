@@ -117,10 +117,22 @@
               <h2>Reader</h2>
             </div>
           </div>
+          <div class="reader-mode-switch" role="tablist" aria-label="Reader sections">
+            <button class="active" id="readerModeButton" type="button" role="tab" aria-selected="true">Reader</button>
+            <button id="readerManageButton" type="button" role="tab" aria-selected="false">Manage</button>
+          </div>
+          <div id="readerLibraryPanel">
+            <div class="reader-library-controls">
+              <input id="readerSearch" type="search" placeholder="Search transcripts" aria-label="Search transcripts">
+              <button id="readerSort" class="small-action" type="button" aria-label="Sort transcripts">↕</button>
+            </div>
+            <div id="readerLibrary" class="reader-library" aria-label="Imported transcripts"></div>
+          </div>
+          <div id="readerManagePanel" hidden>
+            <div class="reader-manage-heading"><h3>Import and backup</h3><button id="readerManageHelp" class="small-action reader-help-button" type="button" aria-label="Help with Reader imports and backups">?</button></div>
           <div class="reader-import-panel">
             <div>
               <strong>Import a translated transcript</strong>
-              <p>Choose a transcriber <code>transcript.json</code> or the matching translated Markdown. Imported files stay on this device.</p>
             </div>
             <input id="readerImportFile" class="story-file-input" type="file" accept=".json,application/json,.md,text/markdown,text/plain" aria-label="Choose a transcript JSON or translated Markdown file">
             <label class="reader-import-name">Save as <input id="readerImportName" type="text" placeholder="Transcript name" aria-label="Name this reader import"></label>
@@ -128,8 +140,11 @@
             <div class="reader-backup-actions"><button id="exportReaderBackup" class="small-action" type="button">Export Reader backup</button><label class="small-action file-action" for="importReaderBackup">Restore Reader backup</label><input id="importReaderBackup" class="visually-hidden" type="file" accept="application/json"></div>
           </div>
           <p id="readerImportMessage" class="story-import-message" role="status" aria-live="polite" hidden></p>
-          <div id="readerLibrary" class="reader-library" aria-label="Imported transcripts"></div>
-          <div id="readerContent" class="reader-content"></div>
+          </div>
+          <div id="readerManageHelpDialog" class="reader-manage-help-dialog" role="dialog" aria-modal="true" aria-labelledby="readerManageHelpTitle" hidden>
+            <div class="reader-manage-help-card"><h3 id="readerManageHelpTitle">Import and restore</h3><p>Import adds or replaces a transcript with the same saved name. Restore merges a Reader backup without changing the original source files.</p><dl><div><dt><code>transcript.json</code></dt><dd>Translated transcriber export with segments, speakers, Sinhala, English, and optional vocabulary.</dd></div><div><dt><code>transcript.md</code></dt><dd>Translated Markdown with speaker headings, Sinhala lines, glossary entries, and English line translations.</dd></div><div><dt><code>sinhala-reader-backup-YYYY-MM-DD.json</code></dt><dd>A Reader backup containing saved documents and shared glossary meanings.</dd></div></dl><button class="primary-action" type="button" data-close-reader-help>Got it</button></div>
+          </div>
+          <section id="readerOverlay" class="reader-overlay" aria-label="Transcript reader" hidden><div id="readerContent" class="reader-content"></div></section>
         </section>
 
         <section id="grammarView" class="view" aria-live="polite">
