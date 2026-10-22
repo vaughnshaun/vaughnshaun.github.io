@@ -1643,8 +1643,8 @@ function renderReader() {
     ? documents
         .map(
           (item) => `<article class="reader-library-item">
-            <div><strong>${escapeHtml(item.title)}</strong><span>${item.passages.length} lines · ${item.vocabulary.length} glossary entries</span></div>
-            <div class="reader-library-actions"><button class="small-action" type="button" data-open-reader="${escapeHtml(item.id)}">Open</button><button class="small-action danger-action" type="button" data-remove-reader="${escapeHtml(item.id)}" aria-label="Remove ${escapeHtml(item.title)}">Remove</button></div>
+            <button class="reader-library-open" type="button" data-open-reader="${escapeHtml(item.id)}"><strong>${escapeHtml(item.title)}</strong><span>${item.passages.length} lines · ${item.vocabulary.length} glossary entries</span></button>
+            <button class="reader-delete-button" type="button" data-remove-reader="${escapeHtml(item.id)}" aria-label="Delete ${escapeHtml(item.title)}">🗑</button>
           </article>`
         )
         .join("")

@@ -129,17 +129,21 @@
             <div id="readerLibrary" class="reader-library" aria-label="Imported transcripts"></div>
           </div>
           <div id="readerManagePanel" hidden>
-            <div class="reader-manage-heading"><h3>Import and backup</h3><button id="readerManageHelp" class="small-action reader-help-button" type="button" aria-label="Help with Reader imports and backups">?</button></div>
-          <div class="reader-import-panel">
-            <div>
-              <strong>Import a translated transcript</strong>
-            </div>
-            <input id="readerImportFile" class="story-file-input" type="file" accept=".json,application/json,.md,text/markdown,text/plain" aria-label="Choose a transcript JSON or translated Markdown file">
-            <label class="reader-import-name">Save as <input id="readerImportName" type="text" placeholder="Transcript name" aria-label="Name this reader import"></label>
-            <button id="readerImportButton" class="small-action" type="button">Import or replace</button>
-            <div class="reader-backup-actions"><button id="exportReaderBackup" class="small-action" type="button">Export Reader backup</button><label class="small-action file-action" for="importReaderBackup">Restore Reader backup</label><input id="importReaderBackup" class="visually-hidden" type="file" accept="application/json"></div>
-          </div>
-          <p id="readerImportMessage" class="story-import-message" role="status" aria-live="polite" hidden></p>
+            <div class="reader-manage-heading"><h3>Reader tools</h3><button id="readerManageHelp" class="small-action reader-help-button" type="button" aria-label="Help with Reader imports and backups">?</button></div>
+            <section class="reader-manage-section" aria-labelledby="readerImportHeading">
+              <h3 id="readerImportHeading">Import</h3>
+              <div class="reader-import-panel">
+                <div><strong>Import a translated transcript</strong></div>
+                <input id="readerImportFile" class="story-file-input" type="file" accept=".json,application/json,.md,text/markdown,text/plain" aria-label="Choose a transcript JSON or translated Markdown file">
+                <label class="reader-import-name">Save as <input id="readerImportName" type="text" placeholder="Transcript name" aria-label="Name this reader import"></label>
+                <button id="readerImportButton" class="small-action" type="button">Import or replace</button>
+              </div>
+              <p id="readerImportMessage" class="story-import-message" role="status" aria-live="polite" hidden></p>
+            </section>
+            <section class="reader-manage-section reader-backup-section" aria-labelledby="readerBackupHeading">
+              <h3 id="readerBackupHeading">Backup</h3>
+              <div class="reader-backup-actions"><button id="exportReaderBackup" class="small-action" type="button">Export Reader backup</button><label class="small-action file-action" for="importReaderBackup">Restore Reader backup</label><input id="importReaderBackup" class="visually-hidden" type="file" accept="application/json"></div>
+            </section>
           </div>
           <div id="readerManageHelpDialog" class="reader-manage-help-dialog" role="dialog" aria-modal="true" aria-labelledby="readerManageHelpTitle" hidden>
             <div class="reader-manage-help-card"><h3 id="readerManageHelpTitle">Import and restore</h3><p>Import adds or replaces a transcript with the same saved name. Restore merges a Reader backup without changing the original source files.</p><dl><div><dt><code>transcript.json</code></dt><dd>Translated transcriber export with segments, speakers, Sinhala, English, and optional vocabulary.</dd></div><div><dt><code>transcript.md</code></dt><dd>Translated Markdown with speaker headings, Sinhala lines, glossary entries, and English line translations.</dd></div><div><dt><code>sinhala-reader-backup-YYYY-MM-DD.json</code></dt><dd>A Reader backup containing saved documents and shared glossary meanings.</dd></div></dl><button class="primary-action" type="button" data-close-reader-help>Got it</button></div>

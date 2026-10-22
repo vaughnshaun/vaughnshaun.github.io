@@ -542,19 +542,53 @@ h3 {
   background: var(--surface);
 }
 
+.reader-library-item:hover,
+.reader-library-item:focus-within {
+  border-color: rgba(15, 118, 110, 0.48);
+  background: #f8fcfb;
+}
+
 .reader-library-item.open {
   border-color: rgba(15, 118, 110, 0.48);
   background: #f8fcfb;
 }
 
-.reader-library-item > div:first-child {
+.reader-library-open {
   display: grid;
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
   gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.reader-library-open:focus-visible {
+  outline: 2px solid rgba(15, 118, 110, 0.42);
+  outline-offset: 3px;
 }
 
 .reader-library-item span {
   color: var(--muted);
   font-size: 0.78rem;
+}
+
+.reader-delete-button {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  place-items: center;
+  border: 1px solid rgba(239, 115, 93, 0.42);
+  border-radius: 8px;
+  background: rgba(239, 115, 93, 0.08);
+  color: #8d2d1d;
+  font-size: 1rem;
 }
 
 .reader-library-actions,
@@ -841,6 +875,30 @@ h3 {
 
 .reader-manage-heading h3 {
   margin: 0;
+}
+
+.reader-manage-section {
+  margin-top: 18px;
+}
+
+.reader-manage-section > h3 {
+  margin: 0 0 8px;
+  color: var(--teal-dark);
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.reader-backup-section {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.reader-backup-section .reader-backup-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .reader-help-button {
@@ -2303,6 +2361,10 @@ h3 {
   .reader-backup-actions .small-action,
   .story-file-input {
     width: 100%;
+  }
+
+  .reader-backup-section .reader-backup-actions {
+    grid-template-columns: 1fr;
   }
 
   .reader-library-item {
