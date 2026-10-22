@@ -58,6 +58,7 @@ const state = {
 
 const els = {
   streakDays: document.querySelector("#streakDays"),
+  themeToggle: document.querySelector("#themeToggle"),
   courseProgress: document.querySelector("#courseProgress"),
   coursePrinciple: document.querySelector("#coursePrinciple"),
   offlineStatus: document.querySelector("#offlineStatus"),
@@ -150,6 +151,11 @@ function bindEvents() {
     tab.addEventListener("click", () => setView(tab.dataset.view));
   });
   els.continueButton.addEventListener("click", () => startLesson((nextRecommendedLesson() ?? state.data.courseLessons[0]).id));
+  els.themeToggle.addEventListener("click", () => {
+    state.settings.appTheme = state.settings.appTheme === "dark" ? "light" : "dark";
+    saveSettings();
+    render();
+  });
   els.lessonSelect.addEventListener("change", (event) => {
     if (event.target.value.startsWith("story:")) startStoryLesson(event.target.value.slice(6));
     else if (event.target.value.startsWith("reference:")) startReferenceLesson(event.target.value.slice(10));
@@ -220,6 +226,7 @@ function bindEvents() {
 }
 
 function render() {
+  applyAppTheme();
   els.coursePrinciple.textContent = state.data.course.principle;
   renderHeader();
   renderPath();
@@ -244,6 +251,13 @@ function renderHeader() {
     ? `Resume ${checkpoint.lessonTitle ?? next?.title ?? "Lesson"} · Round ${checkpoint.lessonPass}/${requiredPassesForMode("course")} · ${level.title}`
     : `${next?.title ?? "Course complete"} of ${total} · ${level.title}`;
   els.transliterationRate.value = String(state.settings.transliterationRate);
+  const isDark = state.settings.appTheme === "dark";
+  els.themeToggle.textContent = isDark ? "☀" : "☾";
+  els.themeToggle.setAttribute("aria-label", `Switch to ${isDark ? "light" : "dark"} mode`);
+}
+
+function applyAppTheme() {
+  document.documentElement.dataset.theme = state.settings.appTheme;
 }
 
 function renderPath() {
@@ -1652,7 +1666,7 @@ function renderReader() {
       ? `<div class="note-band"><p>No saved transcripts match that search.</p></div>`
       : `<div class="note-band"><p>No personal transcripts imported yet.</p></div>`;
   els.readerOverlay.hidden = !document;
-  els.readerOverlay.classList.toggle("is-dark", state.settings.readerTheme === "dark");
+  els.readerOverlay.classList.toggle("is-dark", state.settings.appTheme === "dark");
   els.readerContent.innerHTML = document ? readerDocumentHtml(document) : "";
   els.readerLibrary.querySelectorAll("[data-open-reader]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -1689,7 +1703,7 @@ function readerDocumentHtml(document) {
       </article>`;
     })
     .join("");
-  const isDark = state.settings.readerTheme === "dark";
+  const isDark = state.settings.appTheme === "dark";
   return `<div class="reader-overlay-shell"><header class="reader-overlay-header"><button class="reader-overlay-back" type="button" data-close-reader-overlay aria-label="Close reader">‹</button><div><h2>${escapeHtml(document.title)}</h2><span>${document.passages.length} lines · ${document.vocabulary.length} glossary entries</span></div><button class="reader-theme-toggle" type="button" data-toggle-reader-theme aria-label="Switch to ${isDark ? "light" : "dark"} mode">${isDark ? "☀" : "☾"}</button></header><article class="personal-reader-document"><div class="personal-reader-lines">${lines}</div></article></div>`;
 }
 
@@ -1762,7 +1776,7 @@ function bindReaderEvents(document) {
     renderReader();
   });
   els.readerContent.querySelector("[data-toggle-reader-theme]")?.addEventListener("click", () => {
-    state.settings.readerTheme = state.settings.readerTheme === "dark" ? "light" : "dark";
+    state.settings.appTheme = state.settings.appTheme === "dark" ? "light" : "dark";
     saveSettings();
     renderReader();
   });
@@ -4135,18 +4149,19 @@ function loadSettings() {
 
 function normalizeSettings(settings) {
   const rate = Number(settings?.transliterationRate);
+  const appTheme = settings?.appTheme === "dark" || (settings?.appTheme == null && settings?.readerTheme === "dark") ? "dark" : "light";
   return {
     ...defaultSettings(),
     ...(settings ?? {}),
     transliterationRate: Number.isFinite(rate) ? Math.max(0, Math.min(1, rate)) : defaultSettings().transliterationRate,
-    readerTheme: settings?.readerTheme === "dark" ? "dark" : "light"
+    appTheme
   };
 }
 
 function defaultSettings() {
   return {
     transliterationRate: 0.2,
-    readerTheme: "light"
+    appTheme: "light"
   };
 }
 
