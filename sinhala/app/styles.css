@@ -1161,9 +1161,13 @@ h3 {
   background: rgba(21, 33, 31, 0.88);
 }
 
+:root[data-theme="dark"] .reader-mode-switch button {
+  color: #8a9692;
+}
+
 :root[data-theme="dark"] .tab.active {
-  background: #075f59;
-  color: #fff;
+  background: #84ab9d;
+  color: #15211f;
 }
 
 :root[data-theme="dark"] .small-action,
