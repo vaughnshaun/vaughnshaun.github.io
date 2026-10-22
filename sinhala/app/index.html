@@ -125,6 +125,7 @@
             <input id="readerImportFile" class="story-file-input" type="file" accept=".json,application/json,.md,text/markdown,text/plain" aria-label="Choose a transcript JSON or translated Markdown file">
             <label class="reader-import-name">Save as <input id="readerImportName" type="text" placeholder="Transcript name" aria-label="Name this reader import"></label>
             <button id="readerImportButton" class="small-action" type="button">Import or replace</button>
+            <div class="reader-backup-actions"><button id="exportReaderBackup" class="small-action" type="button">Export Reader backup</button><label class="small-action file-action" for="importReaderBackup">Restore Reader backup</label><input id="importReaderBackup" class="visually-hidden" type="file" accept="application/json"></div>
           </div>
           <p id="readerImportMessage" class="story-import-message" role="status" aria-live="polite" hidden></p>
           <div id="readerLibrary" class="reader-library" aria-label="Imported transcripts"></div>

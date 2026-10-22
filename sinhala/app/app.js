@@ -1,5 +1,5 @@
 import { importHash, parseImportableStory } from "./story-import.js";
-import { parseReaderImport, readerTokens } from "./reader-import.js";
+import { parseReaderImport, readerImportId, readerTokens } from "./reader-import.js";
 
 const IMPORTED_STORIES_STORAGE_KEY = "sinhala-imported-stories";
 const IMPORTED_STORY_NOTICE_KEY = "sinhala-story-import-notice";
@@ -7,6 +7,7 @@ const READER_DATABASE_NAME = "sinhala-reader-imports";
 const READER_DATABASE_VERSION = 1;
 const READER_STORE_NAME = "documents";
 const READER_FALLBACK_STORAGE_KEY = "sinhala-reader-imports-fallback";
+const READER_BACKUP_VERSION = 1;
 const initialStoryImportNotice = loadStoryImportNotice();
 
 const state = {
@@ -77,6 +78,8 @@ const els = {
   readerImportFile: document.querySelector("#readerImportFile"),
   readerImportName: document.querySelector("#readerImportName"),
   readerImportButton: document.querySelector("#readerImportButton"),
+  exportReaderBackup: document.querySelector("#exportReaderBackup"),
+  importReaderBackup: document.querySelector("#importReaderBackup"),
   readerImportMessage: document.querySelector("#readerImportMessage"),
   readerLibrary: document.querySelector("#readerLibrary"),
   readerContent: document.querySelector("#readerContent"),
@@ -155,6 +158,8 @@ function bindEvents() {
   els.importStoryFile.addEventListener("change", importStoryFromFile);
   els.readerImportFile.addEventListener("change", selectReaderFile);
   els.readerImportButton.addEventListener("click", importReaderFile);
+  els.exportReaderBackup.addEventListener("click", exportReaderBackup);
+  els.importReaderBackup.addEventListener("change", importReaderBackup);
   els.translationSearch.addEventListener("input", () => {
     state.translationPage = 0;
     renderTranslationEditor();
@@ -1317,6 +1322,21 @@ async function saveReaderRecord(record) {
   saveReaderFallbackRecords([...records.filter((item) => item?.id !== record.id), record]);
 }
 
+async function saveReaderRecords(records) {
+  if (readerDatabaseAvailable()) {
+    return readerStoreRequest("readwrite", (store) => {
+      let request = null;
+      records.forEach((record) => {
+        request = store.put(record);
+      });
+      return request;
+    });
+  }
+  const byId = new Map(loadReaderFallbackRecords().map((record) => [record?.id, record]));
+  records.forEach((record) => byId.set(record.id, record));
+  saveReaderFallbackRecords([...byId.values()]);
+}
+
 async function deleteReaderRecord(id) {
   if (readerDatabaseAvailable()) return readerStoreRequest("readwrite", (store) => store.delete(id));
   saveReaderFallbackRecords(loadReaderFallbackRecords().filter((item) => item?.id !== id));
@@ -1359,10 +1379,82 @@ function readerNameFromFileName(fileName) {
   return String(fileName ?? "").replace(/\.(json|md)$/i, "").replace(/[-_]+/g, " ").trim();
 }
 
+function readerBackupVocabularyItem(item) {
+  if (!item || typeof item !== "object") return null;
+  const si = String(item.si ?? "").trim();
+  const meanings = Array.isArray(item.meanings) ? item.meanings.map((meaning) => String(meaning ?? "").trim()).filter(Boolean) : [];
+  return si && meanings.length ? { si, meanings } : null;
+}
+
+function readerBackupDocument(value, documentIndex) {
+  if (!value || typeof value !== "object") throw new Error(`Reader backup item ${documentIndex + 1} is invalid.`);
+  const title = String(value.title ?? "").trim();
+  const passages = Array.isArray(value.passages) ? value.passages : [];
+  const vocabulary = Array.isArray(value.vocabulary) ? value.vocabulary.map(readerBackupVocabularyItem) : [];
+  if (!title || !passages.length || vocabulary.some((item) => !item)) throw new Error(`Reader backup item ${documentIndex + 1} is incomplete.`);
+  const normalizedPassages = passages.map((line, lineIndex) => {
+    const lineVocabulary = Array.isArray(line?.vocabulary) ? line.vocabulary.map(readerBackupVocabularyItem) : [];
+    const id = String(line?.id ?? "").trim();
+    const speaker = String(line?.speaker ?? "").trim();
+    const si = String(line?.si ?? "").trim();
+    const en = String(line?.en ?? "").trim();
+    if (!id || !speaker || !si || !en || lineVocabulary.some((item) => !item)) throw new Error(`Reader backup item ${documentIndex + 1}, line ${lineIndex + 1} is incomplete.`);
+    return { id, speaker, si, en, vocabulary: lineVocabulary };
+  });
+  return {
+    id: readerImportId(title),
+    title,
+    sourceName: String(value.sourceName ?? "Reader backup").trim() || "Reader backup",
+    passages: normalizedPassages,
+    vocabulary
+  };
+}
+
+function parseReaderBackup(text) {
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    throw new Error("This Reader backup could not be read.");
+  }
+  if (!payload || payload.version !== READER_BACKUP_VERSION || payload.kind !== "sinhala-reader-backup" || !Array.isArray(payload.documents)) {
+    throw new Error("Choose a Reader backup JSON file exported by this app.");
+  }
+  if (!payload.documents.length) throw new Error("This Reader backup does not contain any transcripts.");
+  const documents = payload.documents.map(readerBackupDocument);
+  const ids = new Set();
+  documents.forEach((document) => {
+    if (ids.has(document.id)) throw new Error("This Reader backup contains duplicate saved names.");
+    ids.add(document.id);
+  });
+  return documents;
+}
+
 function renderReaderImportMessage() {
   els.readerImportMessage.textContent = state.readerImportMessage;
   els.readerImportMessage.hidden = !state.readerImportMessage;
   els.readerImportMessage.classList.toggle("is-error", state.readerImportError);
+}
+
+function exportReaderBackup() {
+  if (!state.readerDocuments.length) {
+    state.readerImportMessage = "There are no Reader transcripts to back up yet.";
+    state.readerImportError = true;
+    renderReaderImportMessage();
+    return;
+  }
+  const exportedAt = new Date().toISOString();
+  const payload = { version: READER_BACKUP_VERSION, kind: "sinhala-reader-backup", exportedAt, documents: state.readerDocuments };
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `sinhala-reader-backup-${exportedAt.slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  state.readerImportMessage = `${state.readerDocuments.length} Reader transcript${state.readerDocuments.length === 1 ? "" : "s"} exported.`;
+  state.readerImportError = false;
+  renderReaderImportMessage();
 }
 
 function renderReader() {
@@ -1607,6 +1699,32 @@ async function importReaderFile() {
     state.readerImportMessage = error.message || "That reader file could not be imported.";
     state.readerImportError = true;
     renderReaderImportMessage();
+  }
+}
+
+async function importReaderBackup(event) {
+  const [file] = event.target.files;
+  if (!file) return;
+  try {
+    if (!/\.json$/i.test(file.name)) throw new Error("Choose a Reader backup JSON file.");
+    const documents = parseReaderBackup(await file.text());
+    const existingIds = new Set(state.readerDocuments.map((document) => document.id));
+    const replaced = documents.filter((document) => existingIds.has(document.id)).length;
+    const importedAt = new Date().toISOString();
+    await saveReaderRecords(documents.map((document) => ({ id: document.id, importedAt, document })));
+    const restoredIds = new Set(documents.map((document) => document.id));
+    state.readerDocuments = [...documents, ...state.readerDocuments.filter((document) => !restoredIds.has(document.id))];
+    state.currentReaderDocumentId = null;
+    state.readerLookup = null;
+    state.readerImportMessage = `Restored ${documents.length} transcript${documents.length === 1 ? "" : "s"}: ${replaced} replaced, ${documents.length - replaced} added.`;
+    state.readerImportError = false;
+    renderReader();
+  } catch (error) {
+    state.readerImportMessage = error.message || "That Reader backup could not be restored.";
+    state.readerImportError = true;
+    renderReaderImportMessage();
+  } finally {
+    event.target.value = "";
   }
 }
 

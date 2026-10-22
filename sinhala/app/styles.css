@@ -497,6 +497,13 @@ h3 {
   line-height: 1.45;
 }
 
+.reader-backup-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .reader-import-name,
 .reader-meaning-editor {
   display: grid;
@@ -2037,6 +2044,7 @@ h3 {
 
   .story-import-panel .small-action,
   .reader-import-panel .small-action,
+  .reader-backup-actions .small-action,
   .story-file-input {
     width: 100%;
   }
